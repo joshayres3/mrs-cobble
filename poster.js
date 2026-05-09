@@ -11,6 +11,14 @@ const { postGuidePanel } = require("./guide");
 // Tracks what each admin selected in step 1 (what to post)
 const pendingPosts = {};
 
+// Auto-delete an interaction message after a delay
+async function autoDelete(interaction, delayMs = 4000) {
+  try {
+    await new Promise((r) => setTimeout(r, delayMs));
+    await interaction.deleteReply();
+  } catch (e) {} // ignore if already deleted
+}
+
 // ─── Step 1 result — admin picked WHAT to post ────────────────────────────────
 async function handlePostWhatSelect(interaction) {
   if (interaction.customId !== "post_select_what") return false;
@@ -168,20 +176,24 @@ async function confirmAndExecute(interaction, pending, liveRules, genAI, enabled
     if (pending.what === "guide") {
       await postGuidePanel(targetChannel);
       await interaction.update({ content: `✅ **SCUM Player Guide** posted in <#${targetChannel.id}>`, components: [] });
+      autoDelete(interaction, 30000);
 
     } else if (pending.what === "rules") {
       await postRules(targetChannel, liveRules);
       await interaction.update({ content: `✅ **Server Rules** posted in <#${targetChannel.id}>`, components: [] });
+      autoDelete(interaction, 30000);
 
     } else if (pending.what === "assistant_on") {
       enabledChannels.add(targetChannel.id);
       try { await supabase.from("assistant_channels").upsert({ channel_id: targetChannel.id }, { onConflict: "channel_id" }); } catch(e) {}
       await interaction.update({ content: `✅ **Assistant Mode enabled** in <#${targetChannel.id}>`, components: [] });
+      autoDelete(interaction, 30000);
 
     } else if (pending.what === "assistant_off") {
       enabledChannels.delete(targetChannel.id);
       try { await supabase.from("assistant_channels").delete().eq("channel_id", targetChannel.id); } catch(e) {}
       await interaction.update({ content: `✅ **Assistant Mode disabled** in <#${targetChannel.id}>`, components: [] });
+      autoDelete(interaction, 30000);
 
     } else if (pending.what === "announce") {
       pending.waitingForAnnouncement = true;
@@ -217,6 +229,7 @@ async function handlePostCancel(interaction) {
   if (interaction.customId !== "post_cancel") return false;
   delete pendingPosts[interaction.user.id];
   await interaction.update({ content: "❌ Cancelled.", components: [] });
+  autoDelete(interaction, 30000);
   return true;
 }
 
@@ -321,6 +334,7 @@ async function handleAnnouncementText(message, genAI, enabledChannels) {
 
     await targetChannel.send({ embeds: [embed] });
     await thinking.edit(`✅ Announcement posted in <#${targetChannel.id}>.`);
+    autoDelete({ deleteReply: () => thinking.delete() }, 3000);
 
   } catch (err) {
     console.error("Announce error:", err.message);
