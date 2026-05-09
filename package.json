@@ -1,0 +1,14 @@
+{
+  "name": "mrs-cobble",
+  "version": "1.0.0",
+  "description": "Cobblestone SCUM Server rule-retrieval bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.15.0",
+    "discord.js": "^14.15.0",
+    "dotenv": "^16.4.5"
+  }
+}
