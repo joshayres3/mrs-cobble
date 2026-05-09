@@ -1,5 +1,7 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, Events } = require("discord.js");
+const { postGuidePanel, handleGuideButton } = require("./guide");
+const { handlePostWhatSelect, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText } = require("./poster");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -18,6 +20,19 @@ const discord  = new Client({
 
 const genAI    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+// ─── Channels where assistant mode is enabled ─────────────────────────────────
+const enabledChannels = new Set();
+
+async function loadEnabledChannels() {
+  try {
+    const { data } = await supabase.from("assistant_channels").select("channel_id");
+    if (data) data.forEach((r) => enabledChannels.add(r.channel_id));
+    console.log(`🤖 Assistant enabled in ${enabledChannels.size} channel(s).`);
+  } catch (err) {
+    console.error("Failed to load assistant channels:", err.message);
+  }
+}
 
 // ─── Default rules ────────────────────────────────────────────────────────────
 const DEFAULT_RULES = {
@@ -250,8 +265,23 @@ const pendingUpdates = {};
 discord.once("ready", async () => {
   console.log(`✅ Mrs. Cobble is online as ${discord.user.tag}`);
   await loadRules();
-  console.log(`📌 Player channel: ${PLAYER_CHANNEL_ID}`);
-  console.log(`🔒 Admin channel:  ${ADMIN_CHANNEL_ID}`);
+  await loadEnabledChannels();
+  console.log(`🔒 Admin channel: ${ADMIN_CHANNEL_ID}`);
+});
+
+// ─── Interaction Handler ─────────────────────────────────────────────────────
+discord.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isStringSelectMenu()) {
+    if (await handlePostWhatSelect(interaction)) return;
+    if (await handlePostWhereSelect(interaction, liveRules)) return;
+    return;
+  }
+  if (interaction.isButton()) {
+    if (await handleGuideButton(interaction)) return;
+    if (await handlePostConfirm(interaction, liveRules, genAI, enabledChannels, supabase)) return;
+    if (await handlePostCancel(interaction)) return;
+    return;
+  }
 });
 
 // ─── Message Handler ──────────────────────────────────────────────────────────
@@ -259,6 +289,31 @@ discord.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const userMessage = message.content.trim();
   if (!userMessage) return;
+
+  // ── !post command works from ANY channel for admins ─────────────────────────
+  if (userMessage.toLowerCase() === "!post" && message.guild) {
+    if (hasAdminRole(message.member)) {
+      const { StringSelectMenuBuilder, ActionRowBuilder } = require("discord.js");
+      const selectWhat = new StringSelectMenuBuilder()
+        .setCustomId("post_select_what")
+        .setPlaceholder("What do you want to do?")
+        .addOptions([
+          { label: "📖 SCUM Player Guide", description: "Interactive guide with 10 topics for new players", value: "guide" },
+          { label: "📋 Server Rules", description: "Post the full server rules", value: "rules" },
+          { label: "🤖 Enable Assistant Mode", description: "Turn on rule answers + sass in a channel", value: "assistant_on" },
+          { label: "🔇 Disable Assistant Mode", description: "Turn off assistant in a channel", value: "assistant_off" },
+          { label: "📣 Announcement", description: "Format and post an announcement to a channel", value: "announce" },
+        ]);
+      const row = new ActionRowBuilder().addComponents(selectWhat);
+      await message.reply({ content: "**What do you want to do?**", components: [row] });
+    }
+    return;
+  }
+
+  // Handle announcement text from anywhere (admin typed after confirming announce)
+  if (message.guild && hasAdminRole(message.member)) {
+    if (await handleAnnouncementText(message, genAI, enabledChannels)) return;
+  }
 
   // ── ADMIN CHANNEL ───────────────────────────────────────────────────────────
   if (message.channelId === ADMIN_CHANNEL_ID) {
@@ -346,8 +401,8 @@ discord.on("messageCreate", async (message) => {
     return;
   }
 
-  // ── PLAYER CHANNEL ──────────────────────────────────────────────────────────
-  if (message.channelId !== PLAYER_CHANNEL_ID) return;
+  // ── ASSISTANT MODE — only respond in channels where it is enabled ────────────
+  if (!enabledChannels.has(message.channelId)) return;
 
   const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|build|park|vehicle|car|plane|shop|map|restart|ip|flag|ban|steal|cheat|inactiv|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
   const hasTrigger    = hasSCUMTrigger(userMessage);
