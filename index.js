@@ -1,12 +1,14 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { createClient } = require("@supabase/supabase-js");
 
-const ALLOWED_CHANNEL_IDS = process.env.ALLOWED_CHANNEL_IDS
-  ? process.env.ALLOWED_CHANNEL_IDS.split(",").map((id) => id.trim())
-  : [];
+// ─── Config ───────────────────────────────────────────────────────────────────
+const PLAYER_CHANNEL_ID = "1397942478379810887";
+const ADMIN_CHANNEL_ID  = "1218303201464422631";
+const ALLOWED_ROLES     = ["Sr. Admin", "Owner"];
 
-const discord = new Client({
+const discord  = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
@@ -14,10 +16,133 @@ const discord = new Client({
   ],
 });
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  systemInstruction: `You are Mrs. Cobble, the assistant for the Cobblestone SCUM server. You have two modes:
+const genAI    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+// ─── Default rules ────────────────────────────────────────────────────────────
+const DEFAULT_RULES = {
+  server: `SERVER INFO
+- Name: Cobblestone PvE/3xLoot+Skill/Mech Sunday, Monday and Wednesday
+- IP: 149.88.100.88:7062
+- 50 slot PVE server. Mech events on Sunday and Monday.
+- 18+ ONLY server
+- Server Restarts (PDT): 12:00 AM, 4:00 AM, 8:00 AM, 12:00 PM, 4:00 PM, 8:00 PM
+- Support: open a ticket in the Support-Ticket channel. Do not open multiple tickets.`,
+
+  general: `GENERAL RULES
+- Be Respectful: no hate speech, sexism, harassment, or personal attacks.
+- No Stealing: do not loot other players bodies, steal vehicles (even unlocked), break into PVE bases, or steal/lockpick chests. Lockpicking is logged.
+- Advertising: no outside server/service ads. Open a ticket to become an official creator.
+- Cheating: no cheats, no third-party apps. Cheating = permanent ban.
+- No Toxicity: no excessive punching, no destroying others stuff, no excessive foul language.
+- Exploits & Alt Accounts: no exploits. No alt accounts for advantage. Alts = permanent ban. Main = 3-day ban.
+- Cargo Drops: first on site = loot rights. Call it in global chat e.g. "Looting B2". Same time arrival = split or leave.
+- Events: weekly events by admins. Disrupting = removal + event ban.
+- Name Plates: no toxic names, no number-only names. Change if asked by admin.
+- All bans include a discussion with the player before action is finalized.`,
+
+  pvp: `PVP RULES
+- Active PvP areas marked by a red circle or square around a POI.
+- PvP is allowed anywhere inside the marked zone.
+- The active PvP POI rotates every 2 weeks.
+- Entering a PvP POI means you accept PvP at any time.
+- Base building NOT allowed inside PvP POIs.
+- Outside PvP zones: rest of map is PvE. Killing players outside PvP zones is not allowed.
+- Zone Boundaries: no camping zone edges to attack entering/leaving players. Engaged = fired a weapon, damaged a player, or joined an active fight. Engaged players may not cross into PvE to avoid the fight. PvP must continue until engagement ends. Non-engaged players may leave at any time.
+- Looting: players killed inside PvP zones may be looted. Vehicles and storage chests inside PvP zones may NOT be stolen. Vehicles brought into PvP zones may NOT be destroyed.
+- Body Recovery: players may return to body if not despawned. Camping bodies to repeatedly kill is not allowed.
+- Combat Logging: logging out or disconnecting to avoid PvP is not allowed.`,
+
+  base: `BASE BUILDING RULES
+DO NOT BUILD:
+- Inside POIs, towns, or cities
+- On loot spawn areas
+- On roads, rivers, rail lines, tunnels, caves, or under power lines
+- Within 50m of roads (shops are an exception)
+- Within 100m of bridges
+- Across rivers (boats must be able to pass)
+Required Distance: 250m from POIs | 150m from settlements
+If too close: admins will notify you. Time given to move loot before removal.
+Flags: Solo = 1 flag | Squads = 2 max
+Flags may NOT cover prefabs, fences, loot spawns, or roads.
+No hiding flags in trees or glitches. Exploiting flag placement = removal or ban.
+Base Health: bases below 30% health may be removed after admin review.
+Unsure about a location? Ask an admin or check the SCUM interactive map.`,
+
+  vehicles: `VEHICLE RULES
+- All vehicles must be registered through the #DMV channel.
+- Unregistered vehicles wiped every Friday. Staff not responsible for wiped vehicles.
+Vehicle Limits (total, planes count toward this):
+Solo: 3 (must be different types) | 2 players: 4 | 3 players: 5 | 4 players: 6
+5 players: 7 | 6 players: 8 | 8 players: 9 | 9+ players: 10 (hard cap)
+Plane Limits: Solo: 1 | 2-4 players: 2 | 5-8 players: 4 | 9+ players: 5
+Wheelbarrows: NOT counted toward vehicle limits. Max 2 per squad.
+Non-Functioning Vehicles: may be locked only after fixed enough to move. Must be moved 15m from spawn locations before locking. Do NOT register until repaired and moved. Long-term broken vehicle storage not allowed.
+Inactivity: vehicles unused for 7 days may be deleted. Drive each vehicle at least once per week.
+Restricted Parking:
+- Trader Zones: deleted after 4 hours
+- POIs/Zoned Areas: do NOT block entrances or obstruct other players
+- If reported and not corrected: vehicle moved to CCC, fine of 5,000 to retrieve
+Trading & Storage: selling vehicles is allowed. No hoarding across the map. Keep only vehicles you actively use.
+Security is your responsibility. Do not leave doors off. Secure it before leaving unattended.`,
+
+  shops: `BUSINESS / SELLING RULES
+- Must apply for a shop via ticket.
+- Shops may only sell items within their approved category.
+- Existing shops before this rule may continue current inventory but not expand into new categories.
+- Undercutting another shop in the same category is not allowed (includes bundle deals, modified items, temp sales, or selling outside a registered shop to bypass pricing).
+- Final pricing dispute determination made by staff.
+- Shops in the blue zone must not store personal loot (prevents loot lag).
+- Shop flags do not count as squad flags.
+- Shops are exempt from the 50m road rule. Roads must not be blocked. All structures at least one foundation from the road.
+- Shop owners responsible for their own advertising or arranging paid advertising through admins.
+- Shops do not receive direct admin assistance including spawning items for resale.
+- Shops must remain active. Inactive shops may be subject to review.`,
+
+  map: `MAP COLOR KEY
+- Green Circle: Traders
+- Yellow Circle: Taxi Pickup
+- Red Marks: PvP zones
+- Purple Squares: Abandoned Bunkers
+- Purple Circles: All other Bunkers (except WW2 Bunkers)
+- Peach color: 4-hour parking limit (vehicle deleted after)
+- Blue Marks: Cobblestone Community Center
+- Light Blue Square in CD: Radiation Zone
+Note: Traders, Bunkers (except WW2), and some POIs = no parking over 4 hours or vehicle deleted.`,
+};
+
+// Live rules loaded from Supabase on startup
+let liveRules = { ...DEFAULT_RULES };
+
+// ─── Load rules from Supabase ─────────────────────────────────────────────────
+async function loadRules() {
+  try {
+    const { data, error } = await supabase.from("rules").select("section, content");
+    if (error) throw error;
+    if (data && data.length > 0) {
+      data.forEach(({ section, content }) => {
+        liveRules[section] = content;
+      });
+      console.log(`📚 Loaded ${data.length} rule sections from database.`);
+    } else {
+      console.log("📚 No saved rules found — using defaults.");
+    }
+  } catch (err) {
+    console.error("Failed to load rules from Supabase:", err.message);
+  }
+}
+
+// ─── Save a rule section to Supabase ─────────────────────────────────────────
+async function saveRule(section, content) {
+  const { error } = await supabase
+    .from("rules")
+    .upsert({ section, content }, { onConflict: "section" });
+  if (error) throw error;
+}
+
+// ─── Build system prompt from live rules ──────────────────────────────────────
+function buildSystemPrompt() {
+  return `You are Mrs. Cobble, the assistant for the Cobblestone SCUM server. You have two modes:
 
 ════════════════════════
 MODE 1 — RULE LOOKUP
@@ -36,138 +161,59 @@ General conversation, greetings, complaints, looking for squad, anything not ask
 ════════════════════════
 MODE 2 — SASSY SCUM COMMENTARY
 ════════════════════════
-When a message contains SCUM game references (bears, puppets, mechs, beepers, crashed vehicles, metabolism, cargo drops, fishing, fame points, drunk driving, etc.), drop a short sassy joke.
+When a message contains SCUM game references drop a short sassy joke.
+Personality: dry wit, deadpan, slightly motherly, veteran player energy. 1-2 sentences MAX.
 
-Your personality: dry wit, deadpan, slightly motherly, like a veteran player who has seen it all and has zero sympathy but is not mean-spirited. Keep it SHORT — one or two sentences max. Punch line focused.
-
-SASSY TONE EXAMPLES:
-Bear/mauled: "The bear was there first. Just saying." | "Maybe next time bring something bigger than a flashlight."
+Bear/mauled: "The bear was there first. Just saying."
 Beepers: "Nothing says good morning like 47 puppets knowing exactly where you are."
-Crashed/flipped vehicle: "Pretty sure the road was right there the whole time." | "Cobblestone has a strict no-intoxicated-driving policy for a reason, champ."
+Crashed vehicle: "Pretty sure the road was right there the whole time."
 Puppets: "It was ONE puppet. And then it was seventeen. Classic story."
 Mechs: "The mech was just doing its job. You were in the way. Technically your fault."
-Starving/vitamins: "Vitamins exist. Just a reminder." | "The body needs water. SCUM has taught us nothing if not that."
+Starving/vitamins: "Vitamins exist. Just a reminder."
 Drunk/moonshine: "Moonshine: technically food. Not recommended as a primary food group."
 Cargo drop: "First on site gets the loot. Second on site gets a lesson."
-Fishing: "A fish! Precious protein. The wilderness provides."
-Metabolism/bathroom: "The metabolism system is peak game design and I will not be taking questions."
 Squad wipe: "Oof. A moment of silence. Very brief. Get back out there."
-Drowning: "Swimming skill not maxed? Noted."
-Bambi/fresh spawn: "Fresh spawn. The purest form. Full of hope and nothing else."
+Fresh spawn: "Fresh spawn. The purest form. Full of hope and nothing else."
 
 ════════════════════════
-RESPONSE FORMAT RULES:
+RESPONSE RULES:
 ════════════════════════
-- Mode 1 (rules): factual, bullet points where helpful, no filler, no opinions.
-- Mode 2 (sass): 1-2 sentences MAX. Punchy. Dry. Never mean or insulting to the player personally.
-- If neither mode applies: respond NORESPONSE and nothing else.
-- Do not combine both modes in one message.
-- Do not explain yourself. Just respond.
+- Rules: factual, bullet points where helpful, no filler.
+- Sass: 1-2 sentences MAX. Punchy. Dry. Never mean.
+- Neither applies: NORESPONSE and nothing else.
+- Do not combine modes. Do not explain yourself.
 
 ════════════════════════════════════════
 COBBLESTONE RULES DATABASE
 ════════════════════════════════════════
 
-SERVER INFO
-- Name: Cobblestone PvE/3xLoot+Skill/Mech Sunday, Monday and Wednesday
-- IP: 149.88.100.88:7062
-- 50 slot PVE server. Mech events on Sunday and Monday.
-- 18+ ONLY server
-- Server Restarts (PDT): 12:00 AM, 4:00 AM, 8:00 AM, 12:00 PM, 4:00 PM, 8:00 PM
-- Support: open a ticket in the Support-Ticket channel. Do not open multiple tickets.
+${liveRules.server}
 
-GENERAL RULES
-- Be Respectful: no hate speech, sexism, harassment, or personal attacks.
-- No Stealing: do not loot other players bodies, steal vehicles (even unlocked), break into PVE bases, or steal/lockpick chests. Lockpicking is logged.
-- Advertising: no outside server/service ads. Open a ticket to become an official creator.
-- Cheating: no cheats, no third-party apps. Cheating = permanent ban.
-- No Toxicity: no excessive punching, no destroying others stuff, no excessive foul language.
-- Exploits & Alt Accounts: no exploits. No alt accounts for advantage. Alts = permanent ban. Main = 3-day ban.
-- Cargo Drops: first on site = loot rights. Call it in global chat e.g. "Looting B2". Same time arrival = split or leave.
-- Events: weekly events by admins. Disrupting = removal + event ban.
-- Name Plates: no toxic names, no number-only names. Change if asked by admin.
-- All bans include a discussion with the player before action is finalized.
+${liveRules.general}
 
-PVP RULES
-- Active PvP areas marked by a red circle or square around a POI.
-- PvP is allowed anywhere inside the marked zone.
-- The active PvP POI rotates every 2 weeks.
-- Entering a PvP POI means you accept PvP at any time.
-- Base building NOT allowed inside PvP POIs.
-- Outside PvP zones: rest of map is PvE. Killing players outside PvP zones is not allowed.
-- Zone Boundaries: no camping zone edges to attack entering/leaving players. Engaged = fired a weapon, damaged a player, or joined an active fight. Engaged players may not cross into PvE to avoid the fight. PvP must continue until engagement ends. Non-engaged players may leave at any time.
-- Looting: players killed inside PvP zones may be looted. Vehicles and storage chests inside PvP zones may NOT be stolen. Vehicles brought into PvP zones may NOT be destroyed.
-- Body Recovery: players may return to body if not despawned. Camping bodies to repeatedly kill is not allowed.
-- Combat Logging: logging out or disconnecting to avoid PvP is not allowed.
+${liveRules.pvp}
 
-BASE BUILDING RULES
-DO NOT BUILD:
-- Inside POIs, towns, or cities
-- On loot spawn areas
-- On roads, rivers, rail lines, tunnels, caves, or under power lines
-- Within 50m of roads (shops are an exception)
-- Within 100m of bridges
-- Across rivers (boats must be able to pass)
+${liveRules.base}
 
-Required Distance: 250m from POIs | 150m from settlements
-If too close: admins will notify you. Time given to move loot before removal.
+${liveRules.vehicles}
 
-Flags: Solo = 1 flag | Squads = 2 max
-Flags may NOT cover prefabs, fences, loot spawns, or roads.
-No hiding flags in trees or glitches. Exploiting flag placement = removal or ban.
-Base Health: bases below 30% health may be removed after admin review.
-Unsure about a location? Ask an admin or check the SCUM interactive map.
+${liveRules.shops}
 
-VEHICLE RULES
-- All vehicles must be registered through the #DMV channel.
-- Unregistered vehicles wiped every Friday. Staff not responsible for wiped vehicles.
+${liveRules.map}`;
+}
 
-Vehicle Limits (total, planes count toward this):
-Solo: 3 (must be different types) | 2 players: 4 | 3 players: 5 | 4 players: 6
-5 players: 7 | 6 players: 8 | 8 players: 9 | 9+ players: 10 (hard cap)
+// ─── Section aliases ──────────────────────────────────────────────────────────
+const SECTION_ALIASES = {
+  general: "general", rules: "general",
+  pvp: "pvp", pvprules: "pvp",
+  base: "base", build: "base", building: "base", baserules: "base",
+  vehicles: "vehicles", vehicle: "vehicles", cars: "vehicles", car: "vehicles", dmv: "vehicles",
+  shops: "shops", shop: "shops", selling: "shops", business: "shops",
+  map: "map", mapcolors: "map", colors: "map",
+  server: "server", serverinfo: "server", info: "server",
+};
 
-Plane Limits: Solo: 1 | 2-4 players: 2 | 5-8 players: 4 | 9+ players: 5
-Wheelbarrows: NOT counted toward vehicle limits. Max 2 per squad.
-
-Non-Functioning Vehicles: may be locked only after fixed enough to move. Must be moved 15m from spawn locations before locking. Do NOT register until repaired and moved. Long-term broken vehicle storage not allowed.
-
-Inactivity: vehicles unused for 7 days may be deleted. Drive each vehicle at least once per week.
-
-Restricted Parking:
-- Trader Zones: deleted after 4 hours
-- POIs/Zoned Areas: do NOT block entrances or obstruct other players
-- If reported and not corrected: vehicle moved to CCC, fine of 5,000 to retrieve
-
-Trading & Storage: selling vehicles is allowed. No hoarding across the map. Keep only vehicles you actively use.
-Security is your responsibility. Do not leave doors off. Secure it before leaving unattended.
-
-BUSINESS / SELLING RULES
-- Must apply for a shop via ticket.
-- Shops may only sell items within their approved category.
-- Existing shops before this rule may continue current inventory but not expand into new categories.
-- Undercutting another shop in the same category is not allowed (includes bundle deals, modified items, temp sales, or selling outside a registered shop to bypass pricing).
-- Final pricing dispute determination made by staff.
-- Shops in the blue zone must not store personal loot (prevents loot lag).
-- Shop flags do not count as squad flags.
-- Shops are exempt from the 50m road rule. Roads must not be blocked. All structures at least one foundation from the road.
-- Shop owners responsible for their own advertising or arranging paid advertising through admins.
-- Shops do not receive direct admin assistance including spawning items for resale.
-- Shops must remain active. Inactive shops may be subject to review.
-
-MAP COLOR KEY
-- Green Circle: Traders
-- Yellow Circle: Taxi Pickup
-- Red Marks: PvP zones
-- Purple Squares: Abandoned Bunkers
-- Purple Circles: All other Bunkers (except WW2 Bunkers)
-- Peach color: 4-hour parking limit (vehicle deleted after)
-- Blue Marks: Cobblestone Community Center
-- Light Blue Square in CD: Radiation Zone
-
-Note: Traders, Bunkers (except WW2), and some POIs = no parking over 4 hours or vehicle deleted.`,
-});
-
-// ─── Sassy SCUM trigger words ─────────────────────────────────────────────────
+// ─── SCUM trigger words ───────────────────────────────────────────────────────
 const SCUM_TRIGGERS = [
   "bear", "bears", "beeper", "beepers", "puppet", "puppets", "mech", "mechs",
   "crashed", "crash", "flipped", "rolled my car", "rolled the car",
@@ -191,48 +237,135 @@ function hasSCUMTrigger(text) {
   return SCUM_TRIGGERS.some((t) => lower.includes(t));
 }
 
-function shouldSass() {
-  return Math.random() < 0.55;
+function shouldSass() { return Math.random() < 0.55; }
+
+function hasAdminRole(member) {
+  return member.roles.cache.some((r) => ALLOWED_ROLES.includes(r.name));
 }
 
+// ─── Pending confirmations ────────────────────────────────────────────────────
+const pendingUpdates = {};
+
 // ─── Ready ────────────────────────────────────────────────────────────────────
-discord.once("ready", () => {
+discord.once("ready", async () => {
   console.log(`✅ Mrs. Cobble is online as ${discord.user.tag}`);
-  if (ALLOWED_CHANNEL_IDS.length > 0) {
-    console.log(`📌 Watching channels: ${ALLOWED_CHANNEL_IDS.join(", ")}`);
-  } else {
-    console.log("📌 Watching ALL channels");
-  }
+  await loadRules();
+  console.log(`📌 Player channel: ${PLAYER_CHANNEL_ID}`);
+  console.log(`🔒 Admin channel:  ${ADMIN_CHANNEL_ID}`);
 });
 
 // ─── Message Handler ──────────────────────────────────────────────────────────
 discord.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
-  if (
-    ALLOWED_CHANNEL_IDS.length > 0 &&
-    !ALLOWED_CHANNEL_IDS.includes(message.channelId)
-  )
-    return;
-
   const userMessage = message.content.trim();
   if (!userMessage) return;
 
+  // ── ADMIN CHANNEL ───────────────────────────────────────────────────────────
+  if (message.channelId === ADMIN_CHANNEL_ID) {
+
+    // Handle yes/no confirmation
+    const pending = pendingUpdates[message.author.id];
+    if (pending && ["yes", "no"].includes(userMessage.toLowerCase())) {
+      if (!hasAdminRole(message.member)) return;
+      if (userMessage.toLowerCase() === "yes") {
+        try {
+          await saveRule(pending.section, pending.newText);
+          liveRules[pending.section] = pending.newText;
+          delete pendingUpdates[message.author.id];
+          await message.reply(`✅ **${pending.section.toUpperCase()}** rules saved permanently. Mrs. Cobble is now using the new rules.`);
+        } catch (err) {
+          await message.reply(`❌ Database error: ${err.message}`);
+        }
+      } else {
+        delete pendingUpdates[message.author.id];
+        await message.reply("❌ Update cancelled. No changes made.");
+      }
+      return;
+    }
+
+    // Handle !ruleupdate command
+    if (userMessage.toLowerCase().startsWith("!ruleupdate")) {
+      if (!hasAdminRole(message.member)) {
+        await message.reply("🚫 Nice try. Sr. Admin or Owner only.");
+        return;
+      }
+
+      const parts = userMessage.slice("!ruleupdate".length).trim();
+      const spaceIndex = parts.indexOf(" ");
+
+      if (spaceIndex === -1) {
+        await message.reply(
+          "**Usage:** `!ruleupdate <section> <new rule text>`\n\n" +
+          "**Sections:** `general` `pvp` `base` `vehicles` `shops` `map` `server`\n\n" +
+          "**Example:**\n`!ruleupdate pvp The PvP zone now rotates every week instead of 2 weeks`"
+        );
+        return;
+      }
+
+      const sectionRaw = parts.slice(0, spaceIndex).toLowerCase().replace(/\s/g, "");
+      const newText    = parts.slice(spaceIndex + 1).trim();
+      const section    = SECTION_ALIASES[sectionRaw];
+
+      if (!section) {
+        await message.reply(`❓ Unknown section: \`${sectionRaw}\`\n\nValid sections: \`general\` \`pvp\` \`base\` \`vehicles\` \`shops\` \`map\` \`server\``);
+        return;
+      }
+
+      // Ask Gemini to rewrite the change cleanly before the admin confirms
+      await message.reply("Rewriting that cleanly, one sec...");
+      let polishedText = newText;
+      try {
+        const rwModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const rwLines = [
+          "You are editing the official rules for a SCUM game server called Cobblestone.",
+          "Here is the CURRENT " + section.toUpperCase() + " section:",
+          liveRules[section],
+          "",
+          "An admin wants to make this change: " + newText,
+          "",
+          "Rewrite the ENTIRE " + section.toUpperCase() + " section incorporating this change.",
+          "Keep the exact same formatting style, bullet points, and tone as the original.",
+          "Output ONLY the rewritten section. No explanation. No preamble."
+        ];
+        const rwResult = await rwModel.generateContent(rwLines.join("\n"));
+        polishedText = rwResult.response.text().trim();
+      } catch (err) {
+        console.error("Rewrite error:", err.message);
+      }
+
+      pendingUpdates[message.author.id] = { section, newText: polishedText };
+      await message.reply(
+        "**Confirm update for " + section.toUpperCase() + "**\n\nRewritten as:\n\n" +
+        polishedText +
+        "\n\nType yes to save permanently or no to cancel."
+      );
+      return;
+    }
+
+    // Ignore everything else in admin channel
+    return;
+  }
+
+  // ── PLAYER CHANNEL ──────────────────────────────────────────────────────────
+  if (message.channelId !== PLAYER_CHANNEL_ID) return;
+
   const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|build|park|vehicle|car|plane|shop|map|restart|ip|flag|ban|steal|cheat|inactiv|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
-  const hasTrigger = hasSCUMTrigger(userMessage);
+  const hasTrigger    = hasSCUMTrigger(userMessage);
 
   if (!looksLikeRule && !hasTrigger) return;
   if (!looksLikeRule && hasTrigger && !shouldSass()) return;
 
   try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: buildSystemPrompt(),
+    });
     const result = await model.generateContent(userMessage);
-    const reply = result.response.text().trim();
-
+    const reply  = result.response.text().trim();
     if (!reply || reply.toUpperCase().startsWith("NORESPONSE")) return;
-
     await message.reply(reply);
   } catch (err) {
-    console.error("Error:", err.message);
+    console.error("Gemini error:", err.message);
   }
 });
 
