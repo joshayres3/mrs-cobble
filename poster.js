@@ -16,15 +16,74 @@ async function handlePostWhatSelect(interaction) {
   if (interaction.customId !== "post_select_what") return false;
 
   const what = interaction.values[0];
-  pendingPosts[interaction.user.id] = { what };
+  pendingPosts[interaction.user.id] = { what, sourceChannelId: interaction.channelId };
 
-  // Build channel list from the guild — text channels only
-  const channels = interaction.guild.channels.cache
+  const labels = {
+    guide:         "📖 SCUM Player Guide",
+    rules:         "📋 Server Rules",
+    assistant_on:  "🤖 Enable Assistant Mode",
+    assistant_off: "🔇 Disable Assistant Mode",
+    announce:      "📣 Announcement",
+  };
+
+  // Show two buttons: this channel or pick a channel
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("post_this_channel")
+      .setLabel("This Channel")
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji("📍"),
+    new ButtonBuilder()
+      .setCustomId("post_pick_channel")
+      .setLabel("Pick a Channel")
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji("🔍"),
+    new ButtonBuilder()
+      .setCustomId("post_cancel")
+      .setLabel("Cancel")
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  await interaction.update({
+    content: `**${labels[what] || what}**\n\nWhich channel?`,
+    components: [row],
+  });
+
+  return true;
+}
+
+// ─── "This Channel" button ────────────────────────────────────────────────────
+async function handlePostThisChannel(interaction, liveRules, genAI, enabledChannels, supabase) {
+  if (interaction.customId !== "post_this_channel") return false;
+
+  const pending = pendingPosts[interaction.user.id];
+  if (!pending) {
+    await interaction.update({ content: "❌ Session expired. Type `!post` again.", components: [] });
+    return true;
+  }
+
+  pending.channelId = interaction.channelId;
+  await confirmAndExecute(interaction, pending, liveRules, genAI, enabledChannels, supabase);
+  return true;
+}
+
+// ─── "Pick a Channel" button — show dropdown ─────────────────────────────────
+async function handlePostPickChannel(interaction) {
+  if (interaction.customId !== "post_pick_channel") return false;
+
+  const pending = pendingPosts[interaction.user.id];
+  if (!pending) {
+    await interaction.update({ content: "❌ Session expired. Type `!post` again.", components: [] });
+    return true;
+  }
+
+  await interaction.guild.channels.fetch();
+  const allChannels = interaction.guild.channels.cache
     .filter((c) => c.type === ChannelType.GuildText)
-    .sort((a, b) => a.position - b.position)
-    .first(25); // Discord max 25 options
+    .sort((a, b) => a.position - b.position);
+  const channels = [...allChannels.values()].slice(0, 25);
 
-  if (!channels.size) {
+  if (!channels.length) {
     await interaction.update({ content: "❌ No text channels found.", components: [] });
     return true;
   }
@@ -37,26 +96,14 @@ async function handlePostWhatSelect(interaction) {
 
   const selectWhere = new StringSelectMenuBuilder()
     .setCustomId("post_select_where")
-    .setPlaceholder("Which channel?")
+    .setPlaceholder("Choose a channel...")
     .addOptions(options);
 
   const row = new ActionRowBuilder().addComponents(selectWhere);
-
-  const labels = {
-    guide:         "📖 SCUM Player Guide",
-    rules:         "📋 Server Rules",
-    assistant_on:  "🤖 Enable Assistant Mode",
-    assistant_off: "🔇 Disable Assistant Mode",
-    announce:      "📣 Announcement",
-  };
-
-  await interaction.update({
-    content: `**Step 2 — Where do you want to post the ${labels[what] || what}?**`,
-    components: [row],
-  });
-
+  await interaction.update({ content: "**Pick a channel:**", components: [row] });
   return true;
 }
+
 
 // ─── Step 2 result — admin picked WHERE to post ───────────────────────────────
 async function handlePostWhereSelect(interaction, liveRules) {
@@ -107,34 +154,12 @@ async function handlePostWhereSelect(interaction, liveRules) {
   return true;
 }
 
-// ─── Step 3 — Confirm button ──────────────────────────────────────────────────
-async function handlePostConfirm(interaction, liveRules, genAI, enabledChannels, supabase) {
-  if (interaction.customId !== "post_confirm") return false;
-
-  const pending = pendingPosts[interaction.user.id];
-  if (!pending) {
-    await interaction.update({ content: "❌ Session expired. Type `!post` again.", components: [] });
-    return true;
-  }
-
+// ─── Shared execute logic ─────────────────────────────────────────────────────
+async function confirmAndExecute(interaction, pending, liveRules, genAI, enabledChannels, supabase) {
   const targetChannel = interaction.guild.channels.cache.get(pending.channelId);
   if (!targetChannel) {
     await interaction.update({ content: "❌ Channel not found.", components: [] });
-    return true;
-  }
-
-  // Announce — don't delete pending yet, wait for their next message
-  if (pending.what === "announce") {
-    pending.waitingForAnnouncement = true;
-    await interaction.update({
-      content: `📣 **Type your announcement now.**
-
-Post it in this channel and Mrs. Cobble will format and send it to <#${targetChannel.id}>.
-
-_Just type your message — she'll handle the rest._`,
-      components: [],
-    });
-    return true;
+    return;
   }
 
   delete pendingPosts[interaction.user.id];
@@ -150,17 +175,21 @@ _Just type your message — she'll handle the rest._`,
 
     } else if (pending.what === "assistant_on") {
       enabledChannels.add(targetChannel.id);
-      try {
-        await supabase.from("assistant_channels").upsert({ channel_id: targetChannel.id }, { onConflict: "channel_id" });
-      } catch (e) { console.error("Supabase error:", e.message); }
-      await interaction.update({ content: `✅ **Assistant Mode enabled** in <#${targetChannel.id}>. She will now answer rule questions and do sass there.`, components: [] });
+      try { await supabase.from("assistant_channels").upsert({ channel_id: targetChannel.id }, { onConflict: "channel_id" }); } catch(e) {}
+      await interaction.update({ content: `✅ **Assistant Mode enabled** in <#${targetChannel.id}>`, components: [] });
 
     } else if (pending.what === "assistant_off") {
       enabledChannels.delete(targetChannel.id);
-      try {
-        await supabase.from("assistant_channels").delete().eq("channel_id", targetChannel.id);
-      } catch (e) { console.error("Supabase error:", e.message); }
-      await interaction.update({ content: `✅ **Assistant Mode disabled** in <#${targetChannel.id}>. She will be silent there.`, components: [] });
+      try { await supabase.from("assistant_channels").delete().eq("channel_id", targetChannel.id); } catch(e) {}
+      await interaction.update({ content: `✅ **Assistant Mode disabled** in <#${targetChannel.id}>`, components: [] });
+
+    } else if (pending.what === "announce") {
+      pending.waitingForAnnouncement = true;
+      pendingPosts[interaction.user.id] = pending; // put back so announcement text handler can find it
+      await interaction.update({
+        content: `📣 **Type your announcement now.**\n\nJust send it in this channel and Mrs. Cobble will format and post it to <#${targetChannel.id}>.`,
+        components: [],
+      });
 
     } else {
       await interaction.update({ content: "❌ Unknown post type.", components: [] });
@@ -169,7 +198,17 @@ _Just type your message — she'll handle the rest._`,
     console.error("Post error:", err.message);
     await interaction.update({ content: `❌ Error: ${err.message}`, components: [] });
   }
+}
 
+// ─── Step 3 — Confirm button (from dropdown path) ────────────────────────────
+async function handlePostConfirm(interaction, liveRules, genAI, enabledChannels, supabase) {
+  if (interaction.customId !== "post_confirm") return false;
+  const pending = pendingPosts[interaction.user.id];
+  if (!pending) {
+    await interaction.update({ content: "❌ Session expired. Type `!post` again.", components: [] });
+    return true;
+  }
+  await confirmAndExecute(interaction, pending, liveRules, genAI, enabledChannels, supabase);
   return true;
 }
 
@@ -293,6 +332,8 @@ async function handleAnnouncementText(message, genAI, enabledChannels) {
 
 module.exports = {
   handlePostWhatSelect,
+  handlePostThisChannel,
+  handlePostPickChannel,
   handlePostWhereSelect,
   handlePostConfirm,
   handlePostCancel,

@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, Events } = require("discord.js");
 const { postGuidePanel, handleGuideButton } = require("./guide");
-const { handlePostWhatSelect, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText } = require("./poster");
+const { handlePostWhatSelect, handlePostThisChannel, handlePostPickChannel, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText } = require("./poster");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -278,6 +278,8 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   }
   if (interaction.isButton()) {
     if (await handleGuideButton(interaction)) return;
+    if (await handlePostThisChannel(interaction, liveRules, genAI, enabledChannels, supabase)) return;
+    if (await handlePostPickChannel(interaction)) return;
     if (await handlePostConfirm(interaction, liveRules, genAI, enabledChannels, supabase)) return;
     if (await handlePostCancel(interaction)) return;
     return;
@@ -306,6 +308,8 @@ discord.on("messageCreate", async (message) => {
         ]);
       const row = new ActionRowBuilder().addComponents(selectWhat);
       await message.reply({ content: "**What do you want to do?**", components: [row] });
+      // Delete the original !post message to keep the channel clean
+      try { await message.delete(); } catch(e) {}
     }
     return;
   }
