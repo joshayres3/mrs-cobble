@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, Events } = require("discord.js");
 const { postGuidePanel, handleGuideButton } = require("./guide");
-const { handlePostWhatSelect, handlePostThisChannel, handlePostPickChannel, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText } = require("./poster");
+const { handlePostWhatSelect, handlePostThisChannel, handlePostPickChannel, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText, handleRuleUpdateSectionSelect, handleRuleUpdateText, handleRuleUpdateCancel } = require("./poster");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -274,14 +274,35 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isStringSelectMenu()) {
     if (await handlePostWhatSelect(interaction)) return;
     if (await handlePostWhereSelect(interaction, liveRules)) return;
+    if (await handleRuleUpdateSectionSelect(interaction, liveRules)) return;
     return;
   }
   if (interaction.isButton()) {
     if (await handleGuideButton(interaction)) return;
+    // Rule update confirm button
+    if (interaction.customId === "ruleupdate_confirm") {
+      const pending = pendingUpdates[interaction.user.id];
+      if (!pending) {
+        await interaction.update({ content: "❌ Session expired. Type !ruleupdate again.", components: [] });
+        return;
+      }
+      try {
+        await saveRule(pending.section, pending.newText);
+        liveRules[pending.section] = pending.newText;
+        delete pendingUpdates[interaction.user.id];
+        await interaction.update({ content: `✅ **${pending.section.toUpperCase()}** rules saved permanently.`, components: [] });
+        // Auto delete after 30 seconds
+        setTimeout(async () => { try { await interaction.deleteReply(); } catch(e) {} }, 30000);
+      } catch (err) {
+        await interaction.update({ content: `❌ Database error: ${err.message}`, components: [] });
+      }
+      return;
+    }
     if (await handlePostThisChannel(interaction, liveRules, genAI, enabledChannels, supabase)) return;
     if (await handlePostPickChannel(interaction)) return;
     if (await handlePostConfirm(interaction, liveRules, genAI, enabledChannels, supabase)) return;
     if (await handlePostCancel(interaction)) return;
+    if (await handleRuleUpdateCancel(interaction)) return;
     return;
   }
 });
@@ -291,6 +312,29 @@ discord.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const userMessage = message.content.trim();
   if (!userMessage) return;
+
+  // ── !ruleupdate command works from ANY channel for admins ───────────────────
+  if (userMessage.toLowerCase() === "!ruleupdate" && message.guild) {
+    if (hasAdminRole(message.member)) {
+      const { StringSelectMenuBuilder, ActionRowBuilder } = require("discord.js");
+      const selectSection = new StringSelectMenuBuilder()
+        .setCustomId("ruleupdate_select_section")
+        .setPlaceholder("Which section do you want to update?")
+        .addOptions([
+          { label: "📋 General Rules",        description: "Respect, stealing, cheating, toxicity, events", value: "general" },
+          { label: "⚔️ PvP Rules",            description: "PvP zones, boundaries, looting, combat logging", value: "pvp" },
+          { label: "🏗️ Base Building Rules",  description: "Where to build, distances, flags, base health",  value: "base" },
+          { label: "🚗 Vehicle Rules",         description: "DMV, limits, parking, inactivity, trading",      value: "vehicles" },
+          { label: "🏪 Business & Shop Rules", description: "Shop applications, categories, undercutting",    value: "shops" },
+          { label: "🗺️ Map Color Key",        description: "Traders, PvP, bunkers, radiation zone",          value: "map" },
+          { label: "📡 Server Info",           description: "Server name, IP, restart times, support",        value: "server" },
+        ]);
+      const row = new ActionRowBuilder().addComponents(selectSection);
+      await message.reply({ content: "**Which rule section do you want to update?**", components: [row] });
+      try { await message.delete(); } catch(e) {}
+    }
+    return;
+  }
 
   // ── !post command works from ANY channel for admins ─────────────────────────
   if (userMessage.toLowerCase() === "!post" && message.guild) {
@@ -312,6 +356,11 @@ discord.on("messageCreate", async (message) => {
       try { await message.delete(); } catch(e) {}
     }
     return;
+  }
+
+  // Handle rule update text (admin typed their change after selecting section)
+  if (message.guild && hasAdminRole(message.member)) {
+    if (await handleRuleUpdateText(message, liveRules, genAI, supabase, pendingUpdates, hasAdminRole)) return;
   }
 
   // Handle announcement text from anywhere (admin typed after confirming announce)
@@ -342,62 +391,30 @@ discord.on("messageCreate", async (message) => {
       return;
     }
 
-    // Handle !ruleupdate command
-    if (userMessage.toLowerCase().startsWith("!ruleupdate")) {
+    // Handle !ruleupdate command — visual menu
+    if (userMessage.toLowerCase() === "!ruleupdate") {
       if (!hasAdminRole(message.member)) {
         await message.reply("🚫 Nice try. Sr. Admin or Owner only.");
         return;
       }
 
-      const parts = userMessage.slice("!ruleupdate".length).trim();
-      const spaceIndex = parts.indexOf(" ");
+      const { StringSelectMenuBuilder, ActionRowBuilder } = require("discord.js");
+      const selectSection = new StringSelectMenuBuilder()
+        .setCustomId("ruleupdate_select_section")
+        .setPlaceholder("Which section do you want to update?")
+        .addOptions([
+          { label: "📋 General Rules",        description: "Respect, stealing, cheating, toxicity, events", value: "general" },
+          { label: "⚔️ PvP Rules",            description: "PvP zones, boundaries, looting, combat logging", value: "pvp" },
+          { label: "🏗️ Base Building Rules",  description: "Where to build, distances, flags, base health",  value: "base" },
+          { label: "🚗 Vehicle Rules",         description: "DMV, limits, parking, inactivity, trading",      value: "vehicles" },
+          { label: "🏪 Business & Shop Rules", description: "Shop applications, categories, undercutting",    value: "shops" },
+          { label: "🗺️ Map Color Key",        description: "Traders, PvP, bunkers, radiation zone",          value: "map" },
+          { label: "📡 Server Info",           description: "Server name, IP, restart times, support",        value: "server" },
+        ]);
 
-      if (spaceIndex === -1) {
-        await message.reply(
-          "**Usage:** `!ruleupdate <section> <new rule text>`\n\n" +
-          "**Sections:** `general` `pvp` `base` `vehicles` `shops` `map` `server`\n\n" +
-          "**Example:**\n`!ruleupdate pvp The PvP zone now rotates every week instead of 2 weeks`"
-        );
-        return;
-      }
-
-      const sectionRaw = parts.slice(0, spaceIndex).toLowerCase().replace(/\s/g, "");
-      const newText    = parts.slice(spaceIndex + 1).trim();
-      const section    = SECTION_ALIASES[sectionRaw];
-
-      if (!section) {
-        await message.reply(`❓ Unknown section: \`${sectionRaw}\`\n\nValid sections: \`general\` \`pvp\` \`base\` \`vehicles\` \`shops\` \`map\` \`server\``);
-        return;
-      }
-
-      // Ask Gemini to rewrite the change cleanly before the admin confirms
-      await message.reply("Rewriting that cleanly, one sec...");
-      let polishedText = newText;
-      try {
-        const rwModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const rwLines = [
-          "You are editing the official rules for a SCUM game server called Cobblestone.",
-          "Here is the CURRENT " + section.toUpperCase() + " section:",
-          liveRules[section],
-          "",
-          "An admin wants to make this change: " + newText,
-          "",
-          "Rewrite the ENTIRE " + section.toUpperCase() + " section incorporating this change.",
-          "Keep the exact same formatting style, bullet points, and tone as the original.",
-          "Output ONLY the rewritten section. No explanation. No preamble."
-        ];
-        const rwResult = await rwModel.generateContent(rwLines.join("\n"));
-        polishedText = rwResult.response.text().trim();
-      } catch (err) {
-        console.error("Rewrite error:", err.message);
-      }
-
-      pendingUpdates[message.author.id] = { section, newText: polishedText };
-      await message.reply(
-        "**Confirm update for " + section.toUpperCase() + "**\n\nRewritten as:\n\n" +
-        polishedText +
-        "\n\nType yes to save permanently or no to cancel."
-      );
+      const row = new ActionRowBuilder().addComponents(selectSection);
+      await message.reply({ content: "**Which rule section do you want to update?**", components: [row] });
+      try { await message.delete(); } catch(e) {}
       return;
     }
 
