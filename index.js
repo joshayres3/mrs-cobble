@@ -16,7 +16,7 @@ const discord = new Client({
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
+  model: "gemini-1.5-flash-latest",
   systemInstruction: `You are Mrs. Cobble, the assistant for the Cobblestone SCUM server. You have two modes:
 
 ════════════════════════
