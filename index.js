@@ -1,7 +1,19 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, Events } = require("discord.js");
 const { postGuidePanel, handleGuideButton } = require("./guide");
-const { handlePostWhatSelect, handlePostThisChannel, handlePostPickChannel, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText, handleRuleUpdateSectionSelect, handleRuleUpdateText, handleRuleUpdateCancel, updatePostedRules } = require("./poster");
+const { 
+  handlePostWhatSelect, 
+  handlePostThisChannel, 
+  handlePostPickChannel, 
+  handlePostWhereSelect, 
+  handlePostConfirm, 
+  handlePostCancel, 
+  handleAnnouncementText, 
+  handleRuleUpdateSectionSelect, 
+  handleRuleUpdateText, 
+  handleRuleUpdateCancel, 
+  updatePostedRules 
+} = require("./poster");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -274,7 +286,7 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isStringSelectMenu()) {
     if (await handlePostWhatSelect(interaction)) return;
     if (await handlePostWhereSelect(interaction, liveRules)) return;
-    if (await handleRuleUpdateSectionSelect(interaction, liveRules)) return;
+    if (await handleRuleUpdateSectionSelect(interaction, liveRules, pendingUpdates)) return;
     return;
   }
   if (interaction.isButton()) {

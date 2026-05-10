@@ -244,6 +244,71 @@ async function handlePostCancel(interaction) {
   return true;
 }
 
+// ─── Handle announcement text from admin after confirm ────────────────────────
+async function handleAnnouncementText(message, genAI, enabledChannels) {
+  // Find a pending announcement for this user
+  const pending = pendingPosts[message.author.id];
+  if (!pending || !pending.waitingForAnnouncement) return false;
+
+  const targetChannel = message.guild?.channels.cache.get(pending.channelId);
+  if (!targetChannel) {
+    delete pendingPosts[message.author.id];
+    await message.reply("❌ Target channel not found. Type `!post` to start again.");
+    return true;
+  }
+
+  delete pendingPosts[message.author.id];
+
+  // Show typing indicator
+  const thinking = await message.reply("✍️ Formatting your announcement...");
+
+  try {
+    // Use Gemini to format the announcement
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = [
+      "You are formatting a Discord server announcement for the Cobblestone SCUM server.",
+      "An admin typed this raw announcement text:",
+      message.content,
+      "",
+      "Format it as a clean, professional Discord announcement. Return ONLY a JSON object with these fields:",
+      '{ "title": "short punchy title", "body": "formatted announcement body with line breaks where appropriate", "footer": "short footer note if relevant, or empty string" }',
+      "",
+      "Rules:",
+      "- Title should be short and descriptive (max 60 chars)",
+      "- Body should be clean and easy to read — use line breaks, bold key info with **text**",
+      "- Keep the original meaning exactly — do not add info that wasn't there",
+      "- Do not use emojis unless the admin used them",
+      "- Output ONLY the JSON, no explanation, no markdown code blocks"
+    ].join("\n");
+
+    const result = await model.generateContent(prompt);
+    let raw = result.response.text().trim();
+    raw = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(raw);
+
+    const { EmbedBuilder } = require("discord.js");
+    const embed = new EmbedBuilder()
+      .setTitle(`📣 ${parsed.title}`)
+      .setDescription(parsed.body)
+      .setColor(0xc8a04a)
+      .setTimestamp();
+
+    if (parsed.footer) {
+      embed.setFooter({ text: parsed.footer });
+    }
+
+    await targetChannel.send({ embeds: [embed] });
+    await thinking.edit(`✅ Announcement posted in <#${targetChannel.id}>.`);
+    autoDelete({ deleteReply: () => thinking.delete() }, 3000);
+
+  } catch (err) {
+    console.error("Announce error:", err.message);
+    await thinking.edit(`❌ Error formatting announcement: ${err.message}`);
+  }
+
+  return true;
+}
+
 // ─── Post rules ───────────────────────────────────────────────────────────────
 async function postRules(channel, liveRules, supabase) {
   const sections = [
@@ -396,10 +461,10 @@ async function handleRuleUpdateText(message, liveRules, genAI, supabase, pending
   if (!message.guild) return false;
   if (!hasAdminRole(message.member)) return false;
 
-  const pending = pendingRuleUpdates[message.author.id];
+  const pending = pendingUpdates[message.author.id];
   if (!pending || !pending.waitingForText) return false;
 
-  delete pendingRuleUpdates[message.author.id];
+  delete pendingUpdates[message.author.id];
 
   const { section } = pending;
   const changeText  = message.content.trim();
@@ -464,15 +529,7 @@ async function handleRuleUpdateText(message, liveRules, genAI, supabase, pending
   return true;
 }
 
-// ─── Rule Update — confirm button ─────────────────────────────────────────────
-async function handleRuleUpdateConfirm(interaction, liveRules, supabase) {
-  if (interaction.customId !== "ruleupdate_confirm") return false;
-
-  const pending = interaction.client._ruleUpdatePending?.[interaction.user.id];
-  // Use the pendingUpdates passed from index.js via closure — handled in index.js
-  return false; // handled in index.js
-}
-
+// ─── Rule Update — cancel button ───────────────────────────────────────────────
 async function handleRuleUpdateCancel(interaction) {
   if (interaction.customId !== "ruleupdate_cancel") return false;
   await interaction.update({ content: "❌ Rule update cancelled. No changes made.", components: [] });
@@ -481,82 +538,25 @@ async function handleRuleUpdateCancel(interaction) {
 }
 
 module.exports = {
-
+  // Post handlers
   handlePostWhatSelect,
+  handlePostThisChannel,
+  handlePostPickChannel,
   handlePostWhereSelect,
   handlePostConfirm,
   handlePostCancel,
+  // Announcement handler
+  handleAnnouncementText,
+  // Rule update handlers
+  handleRuleUpdateSectionSelect,
+  handleRuleUpdateText,
+  handleRuleUpdateCancel,
+  // Utility
+  updatePostedRules,
 };
 
-// ─── Handle announcement text from admin after confirm ────────────────────────
-async function handleAnnouncementText(message, genAI, enabledChannels) {
-  // Find a pending announcement for this user
-  const pending = pendingPosts[message.author.id];
-  if (!pending || !pending.waitingForAnnouncement) return false;
-
-  const targetChannel = message.guild?.channels.cache.get(pending.channelId);
-  if (!targetChannel) {
-    delete pendingPosts[message.author.id];
-    await message.reply("❌ Target channel not found. Type `!post` to start again.");
-    return true;
-  }
-
-  delete pendingPosts[message.author.id];
-
-  // Show typing indicator
-  const thinking = await message.reply("✍️ Formatting your announcement...");
-
-  try {
-    // Use Gemini to format the announcement
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const prompt = [
-      "You are formatting a Discord server announcement for the Cobblestone SCUM server.",
-      "An admin typed this raw announcement text:",
-      message.content,
-      "",
-      "Format it as a clean, professional Discord announcement. Return ONLY a JSON object with these fields:",
-      '{ "title": "short punchy title", "body": "formatted announcement body with line breaks where appropriate", "footer": "short footer note if relevant, or empty string" }',
-      "",
-      "Rules:",
-      "- Title should be short and descriptive (max 60 chars)",
-      "- Body should be clean and easy to read — use line breaks, bold key info with **text**",
-      "- Keep the original meaning exactly — do not add info that wasn't there",
-      "- Do not use emojis unless the admin used them",
-      "- Output ONLY the JSON, no explanation, no markdown code blocks"
-    ].join("\n");
-
-    const result = await model.generateContent(prompt);
-    let raw = result.response.text().trim();
-    raw = raw.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(raw);
-
-    const { EmbedBuilder } = require("discord.js");
-    const embed = new EmbedBuilder()
-      .setTitle(`📣 ${parsed.title}`)
-      .setDescription(parsed.body)
-      .setColor(0xc8a04a)
-      .setTimestamp();
-
-    if (parsed.footer) {
-      embed.setFooter({ text: parsed.footer });
-    }
-
-    await targetChannel.send({ embeds: [embed] });
-    await thinking.edit(`✅ Announcement posted in <#${targetChannel.id}>.`);
-    autoDelete({ deleteReply: () => thinking.delete() }, 3000);
-
-  } catch (err) {
-    console.error("Announce error:", err.message);
-    await thinking.edit(`❌ Error formatting announcement: ${err.message}`);
-  }
-
-  return true;
-}
-
 // ─── Rule Update — section selected ──────────────────────────────────────────
-const pendingRuleUpdates = {};
-
-async function handleRuleUpdateSectionSelect(interaction, liveRules) {
+async function handleRuleUpdateSectionSelect(interaction, liveRules, pendingUpdates) {
   if (interaction.customId !== "ruleupdate_select_section") return false;
 
   const section = interaction.values[0];
@@ -570,7 +570,7 @@ async function handleRuleUpdateSectionSelect(interaction, liveRules) {
     server:   "📡 Server Info",
   };
 
-  pendingRuleUpdates[interaction.user.id] = { section, waitingForText: true };
+  pendingUpdates[interaction.user.id] = { section, waitingForText: true };
 
   // Show current rule content so admin knows what they're editing
   const current = liveRules[section] || "No content found.";
@@ -602,10 +602,10 @@ async function handleRuleUpdateText(message, liveRules, genAI, supabase, pending
   if (!message.guild) return false;
   if (!hasAdminRole(message.member)) return false;
 
-  const pending = pendingRuleUpdates[message.author.id];
+  const pending = pendingUpdates[message.author.id];
   if (!pending || !pending.waitingForText) return false;
 
-  delete pendingRuleUpdates[message.author.id];
+  delete pendingUpdates[message.author.id];
 
   const { section } = pending;
   const changeText  = message.content.trim();
