@@ -529,31 +529,21 @@ async function handleRuleUpdateText(message, liveRules, genAI, supabase, pending
   return true;
 }
 
-// ─── Rule Update — cancel button ───────────────────────────────────────────────
+// ─── Rule Update — confirm button ─────────────────────────────────────────────
+async function handleRuleUpdateConfirm(interaction, liveRules, supabase) {
+  if (interaction.customId !== "ruleupdate_confirm") return false;
+
+  const pending = interaction.client._ruleUpdatePending?.[interaction.user.id];
+  // Use the pendingUpdates passed from index.js via closure — handled in index.js
+  return false; // handled in index.js
+}
+
 async function handleRuleUpdateCancel(interaction) {
   if (interaction.customId !== "ruleupdate_cancel") return false;
   await interaction.update({ content: "❌ Rule update cancelled. No changes made.", components: [] });
   autoDelete(interaction, 10000);
   return true;
 }
-
-module.exports = {
-  // Post handlers
-  handlePostWhatSelect,
-  handlePostThisChannel,
-  handlePostPickChannel,
-  handlePostWhereSelect,
-  handlePostConfirm,
-  handlePostCancel,
-  // Announcement handler
-  handleAnnouncementText,
-  // Rule update handlers
-  handleRuleUpdateSectionSelect,
-  handleRuleUpdateText,
-  handleRuleUpdateCancel,
-  // Utility
-  updatePostedRules,
-};
 
 // ─── Rule Update — section selected ──────────────────────────────────────────
 async function handleRuleUpdateSectionSelect(interaction, liveRules, pendingUpdates) {
@@ -670,15 +660,7 @@ async function handleRuleUpdateText(message, liveRules, genAI, supabase, pending
   return true;
 }
 
-// ─── Rule Update — confirm button ─────────────────────────────────────────────
-async function handleRuleUpdateConfirm(interaction, liveRules, supabase) {
-  if (interaction.customId !== "ruleupdate_confirm") return false;
-
-  const pending = interaction.client._ruleUpdatePending?.[interaction.user.id];
-  // Use the pendingUpdates passed from index.js via closure — handled in index.js
-  return false; // handled in index.js
-}
-
+// ─── Rule Update — cancel button ───────────────────────────────────────────────
 async function handleRuleUpdateCancel(interaction) {
   if (interaction.customId !== "ruleupdate_cancel") return false;
   await interaction.update({ content: "❌ Rule update cancelled. No changes made.", components: [] });
@@ -687,12 +669,19 @@ async function handleRuleUpdateCancel(interaction) {
 }
 
 module.exports = {
-
+  // Post handlers
   handlePostWhatSelect,
   handlePostThisChannel,
   handlePostPickChannel,
   handlePostWhereSelect,
   handlePostConfirm,
   handlePostCancel,
+  // Announcement handler
   handleAnnouncementText,
+  // Rule update handlers
+  handleRuleUpdateSectionSelect,
+  handleRuleUpdateText,
+  handleRuleUpdateCancel,
+  // Utility
+  updatePostedRules,
 };
