@@ -10,12 +10,17 @@ const { postGuidePanel } = require("./guide");
 
 // Tracks what each admin selected in step 1 (what to post)
 const pendingPosts = {};
+const postedRulesMessages = new Map(); // Track posted rule messages for auto-update
 
 // Auto-delete an interaction message after a delay
-async function autoDelete(interaction, delayMs = 4000) {
+async function autoDelete(interaction, delayMs = 30000) {
   try {
     await new Promise((r) => setTimeout(r, delayMs));
-    await interaction.deleteReply();
+    if (interaction.message) {
+      await interaction.message.delete();
+    } else {
+      await interaction.deleteReply();
+    }
   } catch (e) {} // ignore if already deleted
 }
 
@@ -88,7 +93,13 @@ async function handlePostPickChannel(interaction) {
   await interaction.guild.channels.fetch();
   const allChannels = interaction.guild.channels.cache
     .filter((c) => c.type === ChannelType.GuildText)
-    .sort((a, b) => a.position - b.position);
+    .sort((a, b) => {
+      // Sort by parent category first, then by position within category
+      const aParentPos = a.parent?.position ?? 999;
+      const bParentPos = b.parent?.position ?? 999;
+      if (aParentPos !== bParentPos) return aParentPos - bParentPos;
+      return a.position - b.position;
+    });
   const channels = [...allChannels.values()].slice(0, 25);
 
   if (!channels.length) {
@@ -179,7 +190,7 @@ async function confirmAndExecute(interaction, pending, liveRules, genAI, enabled
       autoDelete(interaction, 30000);
 
     } else if (pending.what === "rules") {
-      await postRules(targetChannel, liveRules);
+      await postRules(targetChannel, liveRules, supabase);
       await interaction.update({ content: `✅ **Server Rules** posted in <#${targetChannel.id}>`, components: [] });
       autoDelete(interaction, 30000);
 
@@ -234,7 +245,7 @@ async function handlePostCancel(interaction) {
 }
 
 // ─── Post rules ───────────────────────────────────────────────────────────────
-async function postRules(channel, liveRules) {
+async function postRules(channel, liveRules, supabase) {
   const sections = [
     { key: "server",   emoji: "📡", color: 0x60a5fa },
     { key: "general",  emoji: "📋", color: 0xc8a04a },
@@ -246,13 +257,16 @@ async function postRules(channel, liveRules) {
   ];
 
   // Header
-  await channel.send({
+  const headerMsg = await channel.send({
     embeds: [new EmbedBuilder()
       .setTitle("📜 Cobblestone Server Rules")
       .setDescription("Welcome to Cobblestone. Our goal is to keep the game fun, fair, and enjoyable for everyone.\n\nAll bans include a discussion with the player before action is finalized.\n\n**18+ ONLY SERVER**")
       .setColor(0xc8a04a)
       .setFooter({ text: "Cobblestone SCUM Server • Rules" })]
   });
+
+  // Track message IDs for each section
+  const messageIds = { header: headerMsg.id };
 
   // One embed per section
   for (const s of sections) {
@@ -267,8 +281,71 @@ async function postRules(channel, liveRules) {
       .setDescription(body || content)
       .setColor(s.color);
 
-    await channel.send({ embeds: [embed] });
+    const msg = await channel.send({ embeds: [embed] });
+    messageIds[s.key] = msg.id;
     await new Promise((r) => setTimeout(r, 400));
+  }
+
+  // Save to Supabase and local map
+  try {
+    await supabase.from("posted_rules_messages").upsert({
+      message_id: headerMsg.id,
+      channel_id: channel.id,
+      posted_at: new Date().toISOString(),
+      section_messages: JSON.stringify(messageIds)
+    }, { onConflict: "message_id" });
+    
+    postedRulesMessages.set(channel.id, messageIds);
+  } catch (e) {
+    console.error("Failed to save posted rules tracking:", e.message);
+  }
+}
+
+// ─── Update posted rules when rules change ────────────────────────────────────
+async function updatePostedRules(updatedSection, newContent, liveRules, supabase, discord) {
+  try {
+    // Fetch all tracked rule posts
+    const { data } = await supabase.from("posted_rules_messages").select("*");
+    if (!data || data.length === 0) return;
+
+    const sectionEmojis = {
+      server: "📡", general: "📋", pvp: "⚔️", base: "🏗️",
+      vehicles: "🚗", shops: "🏪", map: "🗺️"
+    };
+    const sectionColors = {
+      server: 0x60a5fa, general: 0xc8a04a, pvp: 0xef4444, base: 0xf59e0b,
+      vehicles: 0x8b5cf6, shops: 0x22c55e, map: 0x3b82f6
+    };
+
+    for (const record of data) {
+      const messageIds = JSON.parse(record.section_messages);
+      const sectionMsgId = messageIds[updatedSection];
+      if (!sectionMsgId) continue;
+
+      try {
+        const channel = await discord.channels.fetch(record.channel_id);
+        if (!channel) continue;
+        
+        const message = await channel.messages.fetch(sectionMsgId);
+        if (!message) continue;
+
+        const lines = newContent.split("\n");
+        const title = lines[0];
+        const body = lines.slice(1).join("\n").trim();
+
+        const embed = new EmbedBuilder()
+          .setTitle(`${sectionEmojis[updatedSection]} ${title}`)
+          .setDescription(body || newContent)
+          .setColor(sectionColors[updatedSection]);
+
+        await message.edit({ embeds: [embed] });
+        console.log(`✅ Updated ${updatedSection} rules in channel ${channel.name}`);
+      } catch (e) {
+        console.error(`Failed to update rules in channel ${record.channel_id}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to update posted rules:", e.message);
   }
 }
 

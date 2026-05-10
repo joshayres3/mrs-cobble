@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, Events } = require("discord.js");
 const { postGuidePanel, handleGuideButton } = require("./guide");
-const { handlePostWhatSelect, handlePostThisChannel, handlePostPickChannel, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText, handleRuleUpdateSectionSelect, handleRuleUpdateText, handleRuleUpdateCancel } = require("./poster");
+const { handlePostWhatSelect, handlePostThisChannel, handlePostPickChannel, handlePostWhereSelect, handlePostConfirm, handlePostCancel, handleAnnouncementText, handleRuleUpdateSectionSelect, handleRuleUpdateText, handleRuleUpdateCancel, updatePostedRules } = require("./poster");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
@@ -291,8 +291,19 @@ discord.on(Events.InteractionCreate, async (interaction) => {
         liveRules[pending.section] = pending.newText;
         delete pendingUpdates[interaction.user.id];
         await interaction.update({ content: `✅ **${pending.section.toUpperCase()}** rules saved permanently.`, components: [] });
+        
+        // Auto-update any posted rule messages
+        updatePostedRules(pending.section, pending.newText, liveRules, supabase, discord).catch(e => 
+          console.error("Failed to auto-update posted rules:", e.message)
+        );
+        
         // Auto delete after 30 seconds
-        setTimeout(async () => { try { await interaction.deleteReply(); } catch(e) {} }, 30000);
+        setTimeout(async () => { 
+          try { 
+            if (interaction.message) await interaction.message.delete();
+            else await interaction.deleteReply();
+          } catch(e) {} 
+        }, 30000);
       } catch (err) {
         await interaction.update({ content: `❌ Database error: ${err.message}`, components: [] });
       }
@@ -365,7 +376,8 @@ discord.on("messageCreate", async (message) => {
 
   // Handle announcement text from anywhere (admin typed after confirming announce)
   if (message.guild && hasAdminRole(message.member)) {
-    if (await handleAnnouncementText(message, genAI, enabledChannels)) return;
+    const handled = await handleAnnouncementText(message, genAI, enabledChannels);
+    if (handled) return;
   }
 
   // ── ADMIN CHANNEL ───────────────────────────────────────────────────────────

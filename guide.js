@@ -21,12 +21,12 @@ You spawn with basically nothing. Before you do anything else:
 
 **Step 2 — Find food and water fast**
 Your character is already hungry and thirsty on spawn. Priority targets:
-• **Water** — streams, rivers, ponds. Drink by looking at water and pressing E. Boil it first if sick.
+• **Water** — Salt water makes you sick, fresh water from streams/rivers/ponds is safe. Drink by looking at water and pressing E.
 • **Food** — search houses, farms, gardens. Berries, cans, vegetables all work early.
 • Do NOT eat raw meat until you have a way to cook it.
 
 **Step 3 — Find shelter before dark**
-Nights in SCUM are extremely dark. Find a building to sleep in or start a small base.
+Nights in SCUM are extremely dark. Find a building to sleep in, start a small base, or find a headlamp, night vision goggles, or torch.
 
 **Step 4 — Avoid Mechs early**
 The mechanical robots patrol restricted zones (military areas). They will kill you instantly early game. The red circle on the map = stay away until you're geared.
@@ -46,7 +46,7 @@ Press **Tab** to open your inventory. The BCU monitor shows your metabolism, hea
 • **Strength (STR)** — melee damage, carry weight, physical power
 • **Constitution (CON)** — health points, stamina, endurance. *Most important for new players.*
 • **Dexterity (DEX)** — speed, stealth, lock picking, weapon handling
-• **Intelligence (INT)** — medical skill, engineering, crafting efficiency
+• **Intelligence (INT)** — medical skill, engineering, crafting efficiency, affects XP gain speed and squad size capacity
 
 **Recommended Starter Build**
 Set Constitution to 5.0 — this gives you the most health and stamina to survive early game. Balance the rest based on playstyle.
@@ -57,7 +57,7 @@ Each attribute has related skills that level up through use:
 | Attribute | Skills |
 |---|---|
 | STR | Melee Weapons, Archery, Brawling |
-| CON | Running, Endurance, Resistance |
+| CON | Running, Endurance |
 | DEX | Stealth, Thievery, Driving |
 | INT | Medical, Engineering, Survival, Awareness |
 
@@ -415,7 +415,7 @@ Marked POIs where PvP is active. Rotates every 2 weeks on this server. Entering 
 Patrolled by Mechs. High-risk, high-reward. Best source of weapons, ammo, and military gear.
 
 **Settlements & Towns**
-The map was fully reworked in 1.0. Towns contain houses with general loot, NPCs, and sometimes traders.
+The map was fully reworked in 1.0. Towns contain houses with general loot and NPCs.
 
 **🔵 Cobblestone Community Center (Blue on map)**
 The server's community hub.
@@ -424,7 +424,7 @@ The server's community hub.
 Designated taxi pickup locations on this server.
 
 **Radiation Zone**
-Light blue square in the CD sector on Cobblestone's map. Avoid without proper protection.
+Light blue square in the C0 sector on Cobblestone's map. Avoid without proper protection.
 
 **Navigation Tips**
 • Use **scummap.com** — interactive map with food, water, buildings, and POI locations
