@@ -181,9 +181,122 @@ async function handleEventDateTimeInput(message, userId, pendingEvents) {
   }
 }
 
+// Handle repeat type selection
+async function handleEventRepeatSelect(interaction, supabase) {
+  if (interaction.customId !== "event_repeat_type") return false;
+
+  const userId = interaction.user.id;
+  const pending = pendingEvents[userId];
+
+  if (!pending) {
+    await interaction.reply({
+      content: "❌ Session expired. Start over with `!post` → Create Event",
+      ephemeral: true
+    });
+    return true;
+  }
+
+  const repeatType = interaction.values[0];
+  pending.repeat_type = repeatType;
+
+  let followUp = "";
+  if (repeatType === "custom") {
+    followUp = "Reply with the number of days between repeats (e.g., `3` for every 3 days):";
+    pending.waitingForRepeatDays = true;
+  } else {
+    // For never, weekly, monthly - create the event immediately
+    pending.waitingForRepeatDays = false;
+    return await finalizEvent(interaction, pending, supabase);
+  }
+
+  await interaction.reply({
+    content: `🔁 **Custom Repeat**\n${followUp}`,
+    ephemeral: true
+  });
+
+  return true;
+}
+
+// Handle custom repeat days input
+async function handleEventRepeatDaysInput(message, userId, pendingEvents, supabase) {
+  const pending = pendingEvents[userId];
+  
+  if (!pending || !pending.waitingForRepeatDays) return false;
+
+  try {
+    const days = parseInt(message.content);
+    if (isNaN(days) || days < 1) {
+      await message.reply("❌ Please enter a valid number of days (e.g., `3`)");
+      return true;
+    }
+
+    pending.repeat_every = days;
+    pending.waitingForRepeatDays = false;
+
+    await message.reply("✅ Event settings finalized. Creating event...");
+    
+    // Create the event
+    await finalizEvent(message, pending, supabase, true);
+    return true;
+  } catch (err) {
+    console.error("Repeat days parse error:", err);
+    await message.reply("❌ Error parsing repeat days.");
+    return true;
+  }
+}
+
+// Finalize and create event
+async function finalizEvent(interaction, pending, supabase, isMessage = false) {
+  try {
+    const { createEvent } = require("./event-db");
+    const { displayCalendar } = require("./event-calendar");
+
+    // Create event in database
+    const event = await createEvent(supabase, {
+      title: pending.title,
+      description: pending.description,
+      location: pending.location,
+      event_date: pending.event_date,
+      repeat_type: pending.repeat_type,
+      repeat_every: pending.repeat_every,
+      created_by: interaction.user.id
+    });
+
+    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PDT`;
+
+    if (isMessage) {
+      await interaction.channel.send(confirmMsg);
+    } else {
+      await interaction.reply({
+        content: confirmMsg,
+        ephemeral: true
+      });
+    }
+
+    // Clean up pending event
+    delete pendingEvents[interaction.user.id];
+
+    return true;
+  } catch (err) {
+    console.error("Event creation error:", err);
+    const errorMsg = `❌ Error creating event: ${err.message}`;
+    if (isMessage) {
+      await interaction.channel.send(errorMsg);
+    } else {
+      await interaction.reply({
+        content: errorMsg,
+        ephemeral: true
+      });
+    }
+    return true;
+  }
+}
+
 module.exports = {
   handleEventOption,
   handleEventModal,
   handleEventDateTimeInput,
+  handleEventRepeatSelect,
+  handleEventRepeatDaysInput,
   pendingEvents
 };

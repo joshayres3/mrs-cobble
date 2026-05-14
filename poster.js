@@ -216,6 +216,34 @@ async function confirmAndExecute(interaction, pending, liveRules, genAI, enabled
         components: [],
       });
 
+    } else if (pending.what === "create_event") {
+      // Check if user has SCUM Admin, Sr. Admin, or Owner role
+      const hasPermission = interaction.member.roles.cache.some(role => 
+        ["SCUM Admin", "Sr. Admin", "Owner"].includes(role.name)
+      );
+      if (!hasPermission) {
+        await interaction.update({
+          content: "❌ You don't have permission to create events. Required role: SCUM Admin or higher.",
+          components: []
+        });
+        return;
+      }
+      // Show event creation modal (step 1)
+      const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+      await interaction.showModal(new ModalBuilder()
+        .setCustomId("event_step1_title")
+        .setTitle("Create Event - Step 1")
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId("event_title")
+              .setLabel("Event Title (e.g., Clan Raid)")
+              .setStyle(TextInputStyle.Short)
+              .setRequired(true)
+          )
+        )
+      );
+
     } else {
       await interaction.update({ content: "❌ Unknown post type.", components: [] });
     }
