@@ -23,7 +23,7 @@ const { createClient } = require("@supabase/supabase-js");
 // ─── Config ───────────────────────────────────────────────────────────────────
 const PLAYER_CHANNEL_ID = "1397942478379810887";
 const ADMIN_CHANNEL_ID  = "1218303201464422631";
-const EVENT_CHANNEL_ID  = "1397942478379810887"; // Where events/calendar post (change this to your events channel)
+const EVENT_CHANNEL_ID  = "1479003221619114087";
 const ALLOWED_ROLES     = ["Sr. Admin", "Owner"];
 
 const discord  = new Client({
