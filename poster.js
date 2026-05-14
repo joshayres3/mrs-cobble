@@ -93,7 +93,7 @@ async function handlePostPickChannel(interaction) {
 
   await interaction.guild.channels.fetch();
   const allChannels = interaction.guild.channels.cache
-    .filter((c) => c.type === ChannelType.GuildText)
+    .filter((c) => c.type === ChannelType.GuildText && c.viewable)
     .sort((a, b) => {
       // Sort by parent category first, then by position within category
       const aParentPos = a.parent?.position ?? 999;
@@ -101,7 +101,7 @@ async function handlePostPickChannel(interaction) {
       if (aParentPos !== bParentPos) return aParentPos - bParentPos;
       return a.position - b.position;
     });
-  const channels = [...allChannels.values()].slice(0, 25);
+  const channels = [...allChannels.values()];
 
   if (!channels.length) {
     await interaction.update({ content: "❌ No text channels found.", components: [] });
