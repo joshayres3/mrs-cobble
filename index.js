@@ -14,12 +14,16 @@ const {
   handleRuleUpdateCancel, 
   updatePostedRules 
 } = require("./poster");
+const { handleEventOption, handleEventModal, handleEventDateTimeInput, pendingEvents } = require("./events/event-handler");
+const { handleEventRSVPButton } = require("./events/event-rsvp");
+const { startReminderScheduler, stopReminderScheduler } = require("./events/event-reminders");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const PLAYER_CHANNEL_ID = "1397942478379810887";
 const ADMIN_CHANNEL_ID  = "1218303201464422631";
+const EVENT_CHANNEL_ID  = "1397942478379810887"; // Where events/calendar post (change this to your events channel)
 const ALLOWED_ROLES     = ["Sr. Admin", "Owner"];
 
 const discord  = new Client({
@@ -270,6 +274,10 @@ function hasAdminRole(member) {
   return member.roles.cache.some((r) => ALLOWED_ROLES.includes(r.name));
 }
 
+function hasSCUMAdminRole(member) {
+  return member.roles.cache.some((r) => ["SCUM Admin", "Sr. Admin", "Owner"].includes(r.name));
+}
+
 // ─── Pending confirmations ────────────────────────────────────────────────────
 const pendingUpdates = {};
 
@@ -279,6 +287,9 @@ discord.once("ready", async () => {
   await loadRules();
   await loadEnabledChannels();
   console.log(`🔒 Admin channel: ${ADMIN_CHANNEL_ID}`);
+  
+  // Start event reminder scheduler
+  startReminderScheduler(discord, supabase, EVENT_CHANNEL_ID);
 });
 
 // ─── Interaction Handler ─────────────────────────────────────────────────────
@@ -291,6 +302,7 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   }
   if (interaction.isButton()) {
     if (await handleGuideButton(interaction)) return;
+    if (await handleEventRSVPButton(interaction, supabase)) return;
     // Rule update confirm button
     if (interaction.customId === "ruleupdate_confirm") {
       const pending = pendingUpdates[interaction.user.id];
@@ -328,6 +340,9 @@ discord.on(Events.InteractionCreate, async (interaction) => {
     if (await handleRuleUpdateCancel(interaction)) return;
     return;
   }
+  if (interaction.isModalSubmit()) {
+    if (await handleEventModal(interaction, supabase)) return;
+  }
 });
 
 // ─── Message Handler ──────────────────────────────────────────────────────────
@@ -335,6 +350,16 @@ discord.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const userMessage = message.content.trim();
   if (!userMessage) return;
+
+  // Handle event date/time input for event creation
+  if (message.guild && !message.author.bot) {
+    const userId = message.author.id;
+    if (pendingEvents[userId]) {
+      if (await handleEventDateTimeInput(message, userId, pendingEvents)) {
+        return;
+      }
+    }
+  }
 
   // ── !ruleupdate command works from ANY channel for admins ───────────────────
   if (userMessage.toLowerCase() === "!ruleupdate" && message.guild) {
@@ -372,10 +397,10 @@ discord.on("messageCreate", async (message) => {
           { label: "🤖 Enable Assistant Mode", description: "Turn on rule answers + sass in a channel", value: "assistant_on" },
           { label: "🔇 Disable Assistant Mode", description: "Turn off assistant in a channel", value: "assistant_off" },
           { label: "📣 Announcement", description: "Format and post an announcement to a channel", value: "announce" },
+          { label: "📅 Create Event", description: "Create a new event with reminders and RSVP", value: "create_event" },
         ]);
       const row = new ActionRowBuilder().addComponents(selectWhat);
       await message.reply({ content: "**What do you want to do?**", components: [row] });
-      // Delete the original !post message to keep the channel clean
       try { await message.delete(); } catch(e) {}
     }
     return;
