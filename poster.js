@@ -101,7 +101,7 @@ async function handlePostPickChannel(interaction) {
       if (aParentPos !== bParentPos) return aParentPos - bParentPos;
       return a.position - b.position;
     });
-  const channels = [...allChannels.values()];
+  const channels = [...allChannels.values()].slice(0, 25);
 
   if (!channels.length) {
     await interaction.update({ content: "❌ No text channels found.", components: [] });
