@@ -298,25 +298,27 @@ async function confirmAndExecute(interaction, pending, liveRules, genAI, enabled
       
       // Show event creation modal (step 1)
       const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
-      try {
-        await interaction.showModal(new ModalBuilder()
-          .setCustomId("event_step1_title")
-          .setTitle("Create Event - Step 1")
-          .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder()
-                .setCustomId("event_title")
-                .setLabel("Event Title (e.g., Clan Raid)")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-            )
+      const modal = new ModalBuilder()
+        .setCustomId("event_step1_title")
+        .setTitle("Create Event - Step 1")
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId("event_title")
+              .setLabel("Event Title (e.g., Clan Raid)")
+              .setStyle(TextInputStyle.Short)
+              .setRequired(true)
           )
         );
+      
+      try {
+        await interaction.showModal(modal);
       } catch (err) {
         console.error("Modal error:", err);
-        await interaction.update({
+        // Fallback if showModal fails
+        await interaction.reply({
           content: "❌ Error showing event form. Try again.",
-          components: []
+          ephemeral: true
         });
       }
 
