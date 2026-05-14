@@ -292,6 +292,10 @@ async function confirmAndExecute(interaction, pending, liveRules, genAI, enabled
         });
         return;
       }
+      // Initialize pending event
+      const { pendingEvents } = require("./event-handler");
+      pendingEvents[interaction.user.id] = { step: 1 };
+      
       // Show event creation modal (step 1)
       const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
       try {

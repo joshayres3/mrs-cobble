@@ -342,7 +342,13 @@ discord.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
   if (interaction.isModalSubmit()) {
-    if (await handleEventModal(interaction, supabase)) return;
+    try {
+      if (await handleEventModal(interaction, supabase)) return;
+    } catch (err) {
+      console.error("Event modal error:", err);
+      await interaction.reply({ content: `❌ Error: ${err.message}`, ephemeral: true }).catch(() => {});
+      return;
+    }
   }
 });
 
