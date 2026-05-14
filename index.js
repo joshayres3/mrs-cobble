@@ -14,9 +14,9 @@ const {
   handleRuleUpdateCancel, 
   updatePostedRules 
 } = require("./poster");
-const { handleEventOption, handleEventModal, handleEventDateTimeInput, handleEventRepeatSelect, handleEventRepeatDaysInput, pendingEvents } = require("./events/event-handler");
-const { handleEventRSVPButton } = require("./events/event-rsvp");
-const { startReminderScheduler, stopReminderScheduler } = require("./events/event-reminders");
+const { handleEventOption, handleEventModal, handleEventDateTimeInput, handleEventRepeatSelect, handleEventRepeatDaysInput, pendingEvents } = require("./event-handler");
+const { handleEventRSVPButton } = require("./event-rsvp");
+const { startReminderScheduler, stopReminderScheduler } = require("./event-reminders");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 
