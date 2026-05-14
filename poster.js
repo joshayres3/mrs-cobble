@@ -92,25 +92,86 @@ async function handlePostPickChannel(interaction) {
   }
 
   await interaction.guild.channels.fetch();
-  const allChannels = interaction.guild.channels.cache
-    .filter((c) => c.type === ChannelType.GuildText && c.viewable)
-    .sort((a, b) => {
-      // Sort by parent category first, then by position within category
-      const aParentPos = a.parent?.position ?? 999;
-      const bParentPos = b.parent?.position ?? 999;
-      if (aParentPos !== bParentPos) return aParentPos - bParentPos;
-      return a.position - b.position;
-    });
-  const channels = [...allChannels.values()].slice(0, 25);
+  
+  // Get all text channels grouped by category
+  const categoryMap = new Map();
+  const uncategorized = [];
 
-  if (!channels.length) {
+  interaction.guild.channels.cache
+    .filter((c) => c.type === ChannelType.GuildText && c.viewable)
+    .forEach((channel) => {
+      if (channel.parent) {
+        if (!categoryMap.has(channel.parent.id)) {
+          categoryMap.set(channel.parent.id, { name: channel.parent.name, channels: [] });
+        }
+        categoryMap.get(channel.parent.id).channels.push(channel);
+      } else {
+        uncategorized.push(channel);
+      }
+    });
+
+  // Build category select menu
+  const options = [];
+  
+  categoryMap.forEach((category) => {
+    options.push({
+      label: category.name,
+      value: `cat_${category.channels[0].parentId}`,
+      description: `${category.channels.length} channels`
+    });
+  });
+
+  if (uncategorized.length > 0) {
+    options.push({
+      label: "Other Channels",
+      value: "cat_none",
+      description: `${uncategorized.length} channels`
+    });
+  }
+
+  if (options.length === 0) {
     await interaction.update({ content: "❌ No text channels found.", components: [] });
     return true;
   }
 
+  const selectCategory = new StringSelectMenuBuilder()
+    .setCustomId("post_select_category")
+    .setPlaceholder("Choose a category...")
+    .addOptions(options);
+
+  const row = new ActionRowBuilder().addComponents(selectCategory);
+  await interaction.update({ content: "**Pick a category:**", components: [row] });
+  return true;
+}
+
+
+// ─── Category selection — show channels in category ───────────────────────────
+async function handleCategorySelect(interaction) {
+  const categoryId = interaction.values[0];
+  
+  await interaction.guild.channels.fetch();
+  
+  let channels = [];
+  if (categoryId === "cat_none") {
+    channels = interaction.guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildText && c.viewable && !c.parent)
+      .sort((a, b) => a.position - b.position);
+  } else {
+    const parentId = categoryId.replace("cat_", "");
+    channels = interaction.guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildText && c.viewable && c.parentId === parentId)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  channels = [...channels.values()];
+
+  if (channels.length === 0) {
+    await interaction.update({ content: "❌ No channels in this category.", components: [] });
+    return true;
+  }
+
   const options = channels.map((c) => ({
-    label: `# ${c.name}`,
-    description: c.parent ? `In: ${c.parent.name}` : "No category",
+    label: c.name,
     value: c.id,
   }));
 
@@ -124,9 +185,12 @@ async function handlePostPickChannel(interaction) {
   return true;
 }
 
-
 // ─── Step 2 result — admin picked WHERE to post ───────────────────────────────
 async function handlePostWhereSelect(interaction, liveRules) {
+  if (interaction.customId === "post_select_category") {
+    return await handleCategorySelect(interaction);
+  }
+  
   if (interaction.customId !== "post_select_where") return false;
 
   const pending = pendingPosts[interaction.user.id];
