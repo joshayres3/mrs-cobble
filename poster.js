@@ -59,17 +59,42 @@ async function handlePostWhatSelect(interaction) {
     const { pendingEvents } = require("./event-handler");
     pendingEvents[interaction.user.id] = { step: 1 };
     
-    // Show event creation modal (step 1)
+    // Show single modal with all event info
     const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
     const modal = new ModalBuilder()
-      .setCustomId("event_step1_title")
-      .setTitle("Create Event - Step 1")
+      .setCustomId("event_create_all")
+      .setTitle("Create Event")
       .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_title")
-            .setLabel("Event Title (e.g., Clan Raid)")
+            .setLabel("Event Title")
             .setStyle(TextInputStyle.Short)
+            .setPlaceholder("e.g., Clan Raid")
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("event_location")
+            .setLabel("Location")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("e.g., Grid D5")
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("event_description")
+            .setLabel("Description (optional)")
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder("Describe the event...")
+            .setRequired(false)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("event_datetime")
+            .setLabel("Date & Time (PDT)")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PDT")
             .setRequired(true)
         )
       );
