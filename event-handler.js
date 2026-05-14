@@ -83,7 +83,7 @@ async function finalizeEvent(interaction, pending, supabase, isMessage = false) 
       created_by: interaction.user.id
     });
 
-    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PDT`;
+    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PST`;
 
     if (isMessage) {
       await interaction.channel.send(confirmMsg);
@@ -126,13 +126,14 @@ async function handleEventModal(interaction, supabase) {
     const description = interaction.fields.getTextInputValue("event_description") || "No description provided";
     const dateTimeStr = interaction.fields.getTextInputValue("event_datetime");
 
-    // Parse the date/time format: MM/DD/YYYY HH:MM AM/PM PDT
-    const dateTimePattern = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/i;
+    // Parse flexible date/time format: MM/DD/YYYY HH:MM AM/PM
+    // Accepts: 7:30 PM, 07:30 PM, 7:30p, 7:30PM, 730PM, 730pm, etc.
+    const dateTimePattern = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):?(\d{2})?\s*(am|pm|a|p)?/i;
     const match = dateTimeStr.match(dateTimePattern);
 
     if (!match) {
       await interaction.reply({
-        content: "❌ Invalid date/time format. Please use: `MM/DD/YYYY HH:MM AM/PM PDT`\nExample: `05/18/2026 3:00 PM PDT`",
+        content: "❌ Invalid date/time format.\nExamples: `05/14/2026 7:30 PM` or `05/14/2026 730pm`",
         ephemeral: true
       });
       return true;
@@ -140,11 +141,17 @@ async function handleEventModal(interaction, supabase) {
 
     const [, month, day, year, hour, minute, ampm] = match;
     let hours = parseInt(hour);
-    if (ampm.toUpperCase() === "PM" && hours !== 12) hours += 12;
-    if (ampm.toUpperCase() === "AM" && hours === 12) hours = 0;
+    let mins = minute ? parseInt(minute) : 0;
+    
+    // Parse AM/PM if provided
+    if (ampm) {
+      const ispm = ampm.toLowerCase().startsWith('p');
+      if (ispm && hours !== 12) hours += 12;
+      if (!ispm && hours === 12) hours = 0;
+    }
 
-    // Create date in PDT
-    const eventDate = new Date(year, month - 1, day, hours, parseInt(minute));
+    // Create date using local timezone
+    const eventDate = new Date(year, month - 1, day, hours, mins);
     
     if (eventDate < new Date()) {
       await interaction.reply({
@@ -174,7 +181,7 @@ async function handleEventModal(interaction, supabase) {
     );
 
     await interaction.reply({
-      content: `✅ Event details saved!\n📅 **${title}** at **${location}**\n⏰ **${eventDate.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PDT**\n\n🔁 **How often should this event repeat?**`,
+      content: `✅ Event details saved!\n📅 **${title}** at **${location}**\n⏰ **${eventDate.toLocaleString("en-US")} PST**\n\n🔁 **How often should this event repeat?**`,
       components: [repeatRow],
       ephemeral: true
     });

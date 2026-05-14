@@ -92,9 +92,9 @@ async function handlePostWhatSelect(interaction) {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_datetime")
-            .setLabel("Date & Time (PDT)")
+            .setLabel("Date & Time (PST)")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PDT")
+            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PST")
             .setRequired(true)
         )
       );
