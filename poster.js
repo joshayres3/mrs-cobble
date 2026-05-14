@@ -40,6 +40,52 @@ async function handlePostWhatSelect(interaction) {
     create_event:  "📅 Create Event",
   };
 
+  // For create_event, skip channel selection and go straight to modal
+  if (what === "create_event") {
+    // Check if user has SCUM Admin, Sr. Admin, or Owner role
+    const hasPermission = interaction.member.roles.cache.some(role => 
+      ["SCUM Admin", "Sr. Admin", "Owner"].includes(role.name)
+    );
+    if (!hasPermission) {
+      await interaction.reply({
+        content: "❌ You don't have permission to create events. Required role: SCUM Admin or higher.",
+        ephemeral: true
+      });
+      delete pendingPosts[interaction.user.id];
+      return true;
+    }
+    
+    // Initialize pending event
+    const { pendingEvents } = require("./event-handler");
+    pendingEvents[interaction.user.id] = { step: 1 };
+    
+    // Show event creation modal (step 1)
+    const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+    const modal = new ModalBuilder()
+      .setCustomId("event_step1_title")
+      .setTitle("Create Event - Step 1")
+      .addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("event_title")
+            .setLabel("Event Title (e.g., Clan Raid)")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        )
+      );
+    
+    try {
+      await interaction.showModal(modal);
+    } catch (err) {
+      console.error("Modal error:", err);
+      await interaction.reply({
+        content: "❌ Error showing event form. Try again.",
+        ephemeral: true
+      });
+    }
+    return true;
+  }
+
   // Show two buttons: this channel or pick a channel
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -279,48 +325,6 @@ async function confirmAndExecute(interaction, pending, liveRules, genAI, enabled
         content: `📣 **Type your announcement now.**\n\nJust send it in this channel and Mrs. Cobble will format and post it to <#${targetChannel.id}>.`,
         components: [],
       });
-
-    } else if (pending.what === "create_event") {
-      // Check if user has SCUM Admin, Sr. Admin, or Owner role
-      const hasPermission = interaction.member.roles.cache.some(role => 
-        ["SCUM Admin", "Sr. Admin", "Owner"].includes(role.name)
-      );
-      if (!hasPermission) {
-        await interaction.update({
-          content: "❌ You don't have permission to create events. Required role: SCUM Admin or higher.",
-          components: []
-        });
-        return;
-      }
-      // Initialize pending event
-      const { pendingEvents } = require("./event-handler");
-      pendingEvents[interaction.user.id] = { step: 1 };
-      
-      // Show event creation modal (step 1)
-      const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
-      const modal = new ModalBuilder()
-        .setCustomId("event_step1_title")
-        .setTitle("Create Event - Step 1")
-        .addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-              .setCustomId("event_title")
-              .setLabel("Event Title (e.g., Clan Raid)")
-              .setStyle(TextInputStyle.Short)
-              .setRequired(true)
-          )
-        );
-      
-      try {
-        await interaction.showModal(modal);
-      } catch (err) {
-        console.error("Modal error:", err);
-        // Fallback if showModal fails
-        await interaction.reply({
-          content: "❌ Error showing event form. Try again.",
-          ephemeral: true
-        });
-      }
 
     } else {
       await interaction.update({ content: "❌ Unknown post type.", components: [] });
