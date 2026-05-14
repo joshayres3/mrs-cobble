@@ -14,7 +14,7 @@ const {
   handleRuleUpdateCancel, 
   updatePostedRules 
 } = require("./poster");
-const { handleEventOption, handleEventModal, handleEventDateTimeInput, handleEventRepeatSelect, handleEventRepeatDaysInput, pendingEvents } = require("./event-handler");
+const { handleEventOption, handleEventModal, handleEventDateTimeInput, handleEventRepeatSelect, handleEventRepeatDaysInput, handleDeleteEventButton, pendingEvents } = require("./event-handler");
 const { handleEventRSVPButton } = require("./event-rsvp");
 const { startReminderScheduler, stopReminderScheduler } = require("./event-reminders");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -304,6 +304,7 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     if (await handleGuideButton(interaction)) return;
     if (await handleEventRSVPButton(interaction, supabase)) return;
+    if (await handleDeleteEventButton(interaction, supabase)) return;
     // Rule update confirm button
     if (interaction.customId === "ruleupdate_confirm") {
       const pending = pendingUpdates[interaction.user.id];
@@ -366,7 +367,7 @@ discord.on("messageCreate", async (message) => {
         return;
       }
       // Handle custom repeat days input
-      if (await handleEventRepeatDaysInput(message, userId, pendingEvents, supabase)) {
+      if (await handleEventRepeatDaysInput(message, userId, pendingEvents, supabase, discord)) {
         return;
       }
     }

@@ -3,7 +3,8 @@
 // ============================================================================
 
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
-const { createEvent, getUpcomingEvents, updateEvent, deleteEvent, pauseEvent } = require("./event-db");
+const { createEvent, getUpcomingEvents, deleteEvent } = require("./event-db");
+const { buildCalendarEmbed } = require("./event-calendar");
 
 const pendingEvents = {};
 
@@ -33,14 +34,14 @@ async function handleEventRepeatSelect(interaction, supabase) {
     });
   } else {
     // For never, weekly, monthly - create the event immediately
-    await finalizeEvent(interaction, pending, supabase);
+    await finalizeEvent(interaction, pending, supabase, interaction.client);
   }
 
   return true;
 }
 
 // Handle custom repeat days input
-async function handleEventRepeatDaysInput(message, userId, pendingEvents, supabase) {
+async function handleEventRepeatDaysInput(message, userId, pendingEvents, supabase, client) {
   const pending = pendingEvents[userId];
   
   if (!pending || !pending.waitingForRepeatDays) return false;
@@ -58,7 +59,7 @@ async function handleEventRepeatDaysInput(message, userId, pendingEvents, supaba
     await message.reply("✅ Event settings finalized. Creating event...");
     
     // Create the event
-    await finalizeEvent(message, pending, supabase, true);
+    await finalizeEvent(message, pending, supabase, client);
     return true;
   } catch (err) {
     console.error("Repeat days parse error:", err);
@@ -67,11 +68,54 @@ async function handleEventRepeatDaysInput(message, userId, pendingEvents, supaba
   }
 }
 
-// Finalize and create event
-async function finalizeEvent(interaction, pending, supabase, isMessage = false) {
-  try {
-    const { createEvent } = require("./event-db");
+// Handle delete event button
+async function handleDeleteEventButton(interaction, supabase) {
+  if (!interaction.customId.startsWith("event_delete_")) return false;
 
+  // Check if user is admin (Sr. Admin or Owner)
+  const hasPermission = interaction.member.roles.cache.some(role => 
+    ["Sr. Admin", "Owner"].includes(role.name)
+  );
+
+  if (!hasPermission) {
+    await interaction.reply({
+      content: "❌ Only admins can delete events.",
+      ephemeral: true
+    });
+    return true;
+  }
+
+  const eventId = interaction.customId.replace("event_delete_", "");
+
+  try {
+    await deleteEvent(supabase, eventId);
+    
+    // Delete the calendar message
+    try {
+      await interaction.message.delete();
+    } catch (err) {
+      console.error("Failed to delete message:", err);
+    }
+
+    await interaction.reply({
+      content: "✅ Event deleted.",
+      ephemeral: true
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Delete event error:", err);
+    await interaction.reply({
+      content: `❌ Error deleting event: ${err.message}`,
+      ephemeral: true
+    });
+    return true;
+  }
+}
+
+// Finalize and create event
+async function finalizeEvent(interaction, pending, supabase, client) {
+  try {
     // Create event in database
     const event = await createEvent(supabase, {
       title: pending.title,
@@ -83,8 +127,45 @@ async function finalizeEvent(interaction, pending, supabase, isMessage = false) 
       created_by: interaction.user.id
     });
 
-    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PST`;
+    // Post calendar with RSVP and DELETE buttons to events channel
+    const EVENT_CHANNEL_ID = "1504618527242326170";
+    try {
+      const eventChannel = await client.channels.fetch(EVENT_CHANNEL_ID);
+      if (eventChannel) {
+        const calendarEmbed = await buildCalendarEmbed(supabase);
+        
+        // Create button row with RSVP and DELETE buttons
+        const buttonRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`event_rsvp_${event[0].id}`)
+            .setLabel(`RSVP (0)`)
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji("✅"),
+          new ButtonBuilder()
+            .setCustomId(`event_delete_${event[0].id}`)
+            .setLabel("Delete Event")
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji("🗑️")
+        );
+        
+        const message = await eventChannel.send({ 
+          embeds: [calendarEmbed],
+          components: [buttonRow]
+        });
+        
+        // Store message ID in database for later updates
+        await supabase
+          .from("events")
+          .update({ calendar_message_id: message.id })
+          .eq("id", event[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to post calendar:", err);
+    }
 
+    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US")} PST`;
+
+    const isMessage = interaction.isCommand?.() === false && !interaction.isModalSubmit?.();
     if (isMessage) {
       await interaction.channel.send(confirmMsg);
     } else {
@@ -101,6 +182,8 @@ async function finalizeEvent(interaction, pending, supabase, isMessage = false) 
   } catch (err) {
     console.error("Event creation error:", err);
     const errorMsg = `❌ Error creating event: ${err.message}`;
+    
+    const isMessage = interaction.isCommand?.() === false && !interaction.isModalSubmit?.();
     if (isMessage) {
       await interaction.channel.send(errorMsg);
     } else {
@@ -207,5 +290,6 @@ module.exports = {
   handleEventDateTimeInput,
   handleEventRepeatSelect,
   handleEventRepeatDaysInput,
+  handleDeleteEventButton,
   pendingEvents
 };
