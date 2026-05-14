@@ -37,6 +37,7 @@ async function handlePostWhatSelect(interaction) {
     assistant_on:  "🤖 Enable Assistant Mode",
     assistant_off: "🔇 Disable Assistant Mode",
     announce:      "📣 Announcement",
+    create_event:  "📅 Create Event",
   };
 
   // Show two buttons: this channel or pick a channel
@@ -151,6 +152,7 @@ async function handlePostWhereSelect(interaction, liveRules) {
     assistant_on:  "🤖 Enable Assistant Mode",
     assistant_off: "🔇 Disable Assistant Mode",
     announce:      "📣 Announcement",
+    create_event:  "📅 Create Event",
   };
 
   const confirmRow = new ActionRowBuilder().addComponents(
@@ -415,137 +417,6 @@ async function updatePostedRules(updatedSection, newContent, liveRules, supabase
 }
 
 // ─── Rule Update — section selected ──────────────────────────────────────────
-async function handleRuleUpdateSectionSelect(interaction, liveRules) {
-  if (interaction.customId !== "ruleupdate_select_section") return false;
-
-  const section = interaction.values[0];
-  const sectionLabels = {
-    general:  "📋 General Rules",
-    pvp:      "⚔️ PvP Rules",
-    base:     "🏗️ Base Building Rules",
-    vehicles: "🚗 Vehicle Rules",
-    shops:    "🏪 Business & Shop Rules",
-    map:      "🗺️ Map Color Key",
-    server:   "📡 Server Info",
-  };
-
-  pendingRuleUpdates[interaction.user.id] = { section, waitingForText: true };
-
-  // Show current rule content so admin knows what they're editing
-  const current = liveRules[section] || "No content found.";
-  const preview = current.length > 800 ? current.slice(0, 800) + "..." : current;
-
-  await interaction.update({
-    content:
-      `**${sectionLabels[section]}**
-
-` +
-      `**Current content:**
-\`\`\`${preview}\`\`\`
-
-` +
-      `📝 **Now type your change in plain English.**
-` +
-      `_Example: "the pvp poi now rotates every 1 week instead of 2"_
-
-` +
-      `Send your message in this channel and Mrs. Cobble will rewrite the section.`,
-    components: [],
-  });
-
-  return true;
-}
-
-// ─── Rule Update — admin typed their change ───────────────────────────────────
-async function handleRuleUpdateText(message, liveRules, genAI, supabase, pendingUpdates, hasAdminRole) {
-  if (!message.guild) return false;
-  if (!hasAdminRole(message.member)) return false;
-
-  const pending = pendingUpdates[message.author.id];
-  if (!pending || !pending.waitingForText) return false;
-
-  delete pendingUpdates[message.author.id];
-
-  const { section } = pending;
-  const changeText  = message.content.trim();
-
-  const thinking = await message.reply("✍️ Rewriting that cleanly, one sec...");
-
-  let polishedText = changeText;
-  try {
-    const rwModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const rwLines = [
-      "You are editing the official rules for a SCUM game server called Cobblestone.",
-      "Here is the CURRENT " + section.toUpperCase() + " section:",
-      liveRules[section],
-      "",
-      "An admin wants to make this change: " + changeText,
-      "",
-      "Rewrite the ENTIRE " + section.toUpperCase() + " section incorporating this change.",
-      "Keep the exact same formatting style, bullet points, and tone as the original.",
-      "Output ONLY the rewritten section. No explanation. No preamble."
-    ];
-    const rwResult = await rwModel.generateContent(rwLines.join("\n"));
-    polishedText = rwResult.response.text().trim();
-  } catch (err) {
-    console.error("Rewrite error:", err.message);
-  }
-
-  // Show confirm/cancel buttons
-  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-  const preview = polishedText.length > 900 ? polishedText.slice(0, 900) + "..." : polishedText;
-
-  const confirmRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("ruleupdate_confirm")
-      .setLabel("Save Permanently")
-      .setStyle(ButtonStyle.Success)
-      .setEmoji("✅"),
-    new ButtonBuilder()
-      .setCustomId("ruleupdate_cancel")
-      .setLabel("Cancel")
-      .setStyle(ButtonStyle.Danger),
-  );
-
-  // Store the polished text for when they confirm
-  pendingUpdates[message.author.id] = { section, newText: polishedText };
-
-  await thinking.edit({
-    content:
-      `**Confirm update for ${section.toUpperCase()}**
-
-` +
-      `**Rewritten as:**
-\`\`\`${preview}\`\`\`
-
-` +
-      `Does this look correct?`,
-    components: [confirmRow],
-  });
-
-  // Auto delete the admin's typed message to keep channel clean
-  try { await message.delete(); } catch(e) {}
-
-  return true;
-}
-
-// ─── Rule Update — confirm button ─────────────────────────────────────────────
-async function handleRuleUpdateConfirm(interaction, liveRules, supabase) {
-  if (interaction.customId !== "ruleupdate_confirm") return false;
-
-  const pending = interaction.client._ruleUpdatePending?.[interaction.user.id];
-  // Use the pendingUpdates passed from index.js via closure — handled in index.js
-  return false; // handled in index.js
-}
-
-async function handleRuleUpdateCancel(interaction) {
-  if (interaction.customId !== "ruleupdate_cancel") return false;
-  await interaction.update({ content: "❌ Rule update cancelled. No changes made.", components: [] });
-  autoDelete(interaction, 10000);
-  return true;
-}
-
-// ─── Rule Update — section selected ──────────────────────────────────────────
 async function handleRuleUpdateSectionSelect(interaction, liveRules, pendingUpdates) {
   if (interaction.customId !== "ruleupdate_select_section") return false;
 
@@ -568,18 +439,10 @@ async function handleRuleUpdateSectionSelect(interaction, liveRules, pendingUpda
 
   await interaction.update({
     content:
-      `**${sectionLabels[section]}**
-
-` +
-      `**Current content:**
-\`\`\`${preview}\`\`\`
-
-` +
-      `📝 **Now type your change in plain English.**
-` +
-      `_Example: "the pvp poi now rotates every 1 week instead of 2"_
-
-` +
+      `**${sectionLabels[section]}**\n\n` +
+      `**Current content:**\n\`\`\`${preview}\`\`\`\n\n` +
+      `📝 **Now type your change in plain English.**\n` +
+      `_Example: "the pvp poi now rotates every 1 week instead of 2"_\n\n` +
       `Send your message in this channel and Mrs. Cobble will rewrite the section.`,
     components: [],
   });
@@ -643,13 +506,8 @@ async function handleRuleUpdateText(message, liveRules, genAI, supabase, pending
 
   await thinking.edit({
     content:
-      `**Confirm update for ${section.toUpperCase()}**
-
-` +
-      `**Rewritten as:**
-\`\`\`${preview}\`\`\`
-
-` +
+      `**Confirm update for ${section.toUpperCase()}**\n\n` +
+      `**Rewritten as:**\n\`\`\`${preview}\`\`\`\n\n` +
       `Does this look correct?`,
     components: [confirmRow],
   });
