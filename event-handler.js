@@ -48,9 +48,15 @@ async function handleEventOption(interaction) {
 // Handle modal submissions for event creation steps
 async function handleEventModal(interaction, supabase) {
   const userId = interaction.user.id;
+  
+  // Initialize pending event if it doesn't exist
+  if (!pendingEvents[userId]) {
+    pendingEvents[userId] = { step: 1 };
+  }
+  
   const pending = pendingEvents[userId];
 
-  if (!pending) return false;
+  if (pending.step === undefined) return false;
 
   // STEP 1: Title
   if (interaction.customId === "event_step1_title") {
