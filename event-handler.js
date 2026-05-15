@@ -135,8 +135,67 @@ async function showCreateEventModal(interaction) {
   }
 }
 
+async function handleDeleteEventButton(interaction, supabase, eventDb) {
+  if (!interaction.customId.startsWith("event_delete_")) {
+    return false;
+  }
+
+  const eventId = interaction.customId.replace("event_delete_", "");
+
+  try {
+    // Check if user is admin (Sr. Admin or Owner role)
+    const hasAdminRole = interaction.member.roles.cache.some(role =>
+      ["Sr. Admin", "Owner"].includes(role.name)
+    );
+
+    if (!hasAdminRole) {
+      await interaction.reply({
+        content: "❌ Only Sr. Admin or Owner can delete events.",
+        ephemeral: true
+      });
+      return true;
+    }
+
+    // Get event to check if it exists
+    const event = await eventDb.getEventById(supabase, eventId);
+    if (!event) {
+      await interaction.reply({
+        content: "❌ Event not found.",
+        ephemeral: true
+      });
+      return true;
+    }
+
+    // Delete event from database (will cascade delete RSVPs and reminders)
+    await eventDb.deleteEvent(supabase, eventId);
+
+    // Delete the message
+    try {
+      await interaction.message.delete();
+    } catch (err) {
+      console.error("Failed to delete event message:", err);
+    }
+
+    // Reply to admin
+    await interaction.reply({
+      content: `✅ Event "${event.title}" has been deleted.`,
+      ephemeral: true
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Delete event button error:", error);
+    await interaction.reply({
+      content: "❌ Error deleting event. Please try again.",
+      ephemeral: true
+    });
+    return true;
+  }
+}
+
 module.exports = {
   handleEventModal,
   showCreateEventModal,
+  handleDeleteEventButton,
   pendingEvents
 };
