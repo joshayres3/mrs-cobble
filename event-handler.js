@@ -4,7 +4,6 @@
 
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
 const { createEvent, getUpcomingEvents, deleteEvent } = require("./event-db");
-const { buildCalendarEmbed } = require("./event-calendar");
 
 const pendingEvents = {};
 
@@ -67,6 +66,8 @@ async function finalizeEvent(interaction, pending, supabase, client) {
       created_by: interaction.user.id
     });
 
+    console.log("Event created:", event);
+
     // Post calendar with RSVP and DELETE buttons to events channel
     const EVENT_CHANNEL_ID = "1504618527242326170";
     console.log("Attempting to post calendar to channel:", EVENT_CHANNEL_ID);
@@ -75,18 +76,24 @@ async function finalizeEvent(interaction, pending, supabase, client) {
       console.log("Channel fetched:", eventChannel?.name || "unknown");
       if (eventChannel) {
         console.log("Building calendar embed...");
-        const calendarEmbed = await buildCalendarEmbed(supabase);
+        
+        // Create a simple test embed
+        const calendarEmbed = new EmbedBuilder()
+          .setTitle("📅 UPCOMING EVENTS")
+          .setDescription(`**${pending.title}**\n📍 ${pending.location}\n⏰ ${pending.event_date.toLocaleString()}\n👥 RSVPs: 0`)
+          .setColor(0xd4a574);
+        
         console.log("Sending calendar message...");
         
         // Create button row with RSVP and DELETE buttons
         const buttonRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-            .setCustomId(`event_rsvp_${event[0].id}`)
+            .setCustomId(`event_rsvp_${event.id}`)
             .setLabel(`RSVP (0)`)
             .setStyle(ButtonStyle.Primary)
             .setEmoji("✅"),
           new ButtonBuilder()
-            .setCustomId(`event_delete_${event[0].id}`)
+            .setCustomId(`event_delete_${event.id}`)
             .setLabel("Delete Event")
             .setStyle(ButtonStyle.Danger)
             .setEmoji("🗑️")
@@ -102,7 +109,7 @@ async function finalizeEvent(interaction, pending, supabase, client) {
         await supabase
           .from("events")
           .update({ calendar_message_id: message.id })
-          .eq("id", event[0].id);
+          .eq("id", event.id);
       } else {
         console.error("Channel not found!");
       }
