@@ -96,6 +96,15 @@ async function handlePostWhatSelect(interaction) {
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PST")
             .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("event_repeat")
+            .setLabel("Repeat (never/weekly/monthly/custom X)")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("e.g., weekly or custom 3")
+            .setRequired(true)
+            .setValue("never")
         )
       );
     

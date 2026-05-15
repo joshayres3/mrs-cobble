@@ -14,7 +14,7 @@ const {
   handleRuleUpdateCancel, 
   updatePostedRules 
 } = require("./poster");
-const { handleEventOption, handleEventModal, handleEventDateTimeInput, handleEventRepeatSelect, handleEventRepeatDaysInput, handleDeleteEventButton, pendingEvents } = require("./event-handler");
+const { handleEventModal, handleDeleteEventButton, pendingEvents } = require("./event-handler");
 const { handleEventRSVPButton } = require("./event-rsvp");
 const { startReminderScheduler, stopReminderScheduler } = require("./event-reminders");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -344,7 +344,7 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   }
   if (interaction.isModalSubmit()) {
     try {
-      if (await handleEventModal(interaction, supabase)) return;
+      if (await handleEventModal(interaction, supabase, discord)) return;
     } catch (err) {
       console.error("Event modal error:", err);
       await interaction.reply({ content: `❌ Error: ${err.message}`, ephemeral: true }).catch(() => {});
@@ -364,6 +364,10 @@ discord.on("messageCreate", async (message) => {
     const userId = message.author.id;
     if (pendingEvents[userId]) {
       if (await handleEventDateTimeInput(message, userId, pendingEvents)) {
+        return;
+      }
+      // Handle repeat type selection
+      if (await handleEventRepeatTypeInput(message, userId, pendingEvents, supabase, discord)) {
         return;
       }
       // Handle custom repeat days input

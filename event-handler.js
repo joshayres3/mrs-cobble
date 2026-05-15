@@ -8,66 +8,6 @@ const { buildCalendarEmbed } = require("./event-calendar");
 
 const pendingEvents = {};
 
-// Handle repeat type selection
-async function handleEventRepeatSelect(interaction, supabase) {
-  if (interaction.customId !== "event_repeat_type") return false;
-
-  const userId = interaction.user.id;
-  const pending = pendingEvents[userId];
-
-  if (!pending) {
-    await interaction.reply({
-      content: "❌ Session expired. Start over with `!post` → Create Event",
-      ephemeral: true
-    });
-    return true;
-  }
-
-  const repeatType = interaction.values[0];
-  pending.repeat_type = repeatType;
-
-  if (repeatType === "custom") {
-    pending.waitingForRepeatDays = true;
-    await interaction.reply({
-      content: `🔁 **Custom Repeat**\nReply with the number of days between repeats (e.g., \`3\` for every 3 days):`,
-      ephemeral: true
-    });
-  } else {
-    // For never, weekly, monthly - create the event immediately
-    await finalizeEvent(interaction, pending, supabase, interaction.client);
-  }
-
-  return true;
-}
-
-// Handle custom repeat days input
-async function handleEventRepeatDaysInput(message, userId, pendingEvents, supabase, client) {
-  const pending = pendingEvents[userId];
-  
-  if (!pending || !pending.waitingForRepeatDays) return false;
-
-  try {
-    const days = parseInt(message.content);
-    if (isNaN(days) || days < 1) {
-      await message.reply("❌ Please enter a valid number of days (e.g., `3`)");
-      return true;
-    }
-
-    pending.repeat_every = days;
-    pending.waitingForRepeatDays = false;
-
-    await message.reply("✅ Event settings finalized. Creating event...");
-    
-    // Create the event
-    await finalizeEvent(message, pending, supabase, client);
-    return true;
-  } catch (err) {
-    console.error("Repeat days parse error:", err);
-    await message.reply("❌ Error parsing repeat days.");
-    return true;
-  }
-}
-
 // Handle delete event button
 async function handleDeleteEventButton(interaction, supabase) {
   if (!interaction.customId.startsWith("event_delete_")) return false;
@@ -163,7 +103,7 @@ async function finalizeEvent(interaction, pending, supabase, client) {
       console.error("Failed to post calendar:", err);
     }
 
-    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US")} PST`;
+    const confirmMsg = `✅ **Event Created: ${pending.title}**\n📍 Location: ${pending.location}\n⏰ Date: ${pending.event_date.toLocaleString("en-US")} PST\n🔁 Repeats: ${pending.repeat_type}`;
 
     const isMessage = interaction.isCommand?.() === false && !interaction.isModalSubmit?.();
     if (isMessage) {
@@ -197,7 +137,7 @@ async function finalizeEvent(interaction, pending, supabase, client) {
 }
 
 // Handle modal submissions for event creation
-async function handleEventModal(interaction, supabase) {
+async function handleEventModal(interaction, supabase, client) {
   const userId = interaction.user.id;
   const pending = pendingEvents[userId];
 
@@ -208,6 +148,7 @@ async function handleEventModal(interaction, supabase) {
     const location = interaction.fields.getTextInputValue("event_location");
     const description = interaction.fields.getTextInputValue("event_description") || "No description provided";
     const dateTimeStr = interaction.fields.getTextInputValue("event_datetime");
+    const repeatStr = interaction.fields.getTextInputValue("event_repeat");
 
     // Parse flexible date/time format: MM/DD/YYYY HH:MM AM/PM
     // Accepts: 7:30 PM, 07:30 PM, 7:30p, 7:30PM, 730PM, 730pm, etc.
@@ -244,30 +185,36 @@ async function handleEventModal(interaction, supabase) {
       return true;
     }
 
+    // Parse repeat option
+    const repeatInput = repeatStr.toLowerCase().trim();
+    let repeatType = "never";
+    let repeatEvery = null;
+
+    if (repeatInput === "weekly") {
+      repeatType = "weekly";
+    } else if (repeatInput === "monthly") {
+      repeatType = "monthly";
+    } else if (repeatInput.startsWith("custom")) {
+      const parts = repeatInput.split(" ");
+      if (parts.length >= 2) {
+        const days = parseInt(parts[1]);
+        if (!isNaN(days) && days >= 1) {
+          repeatType = "custom";
+          repeatEvery = days;
+        }
+      }
+    }
+
     // Update pending with all info
     pending.title = title;
     pending.location = location;
     pending.description = description;
     pending.event_date = eventDate;
+    pending.repeat_type = repeatType;
+    pending.repeat_every = repeatEvery;
 
-    // Ask for repeat settings
-    const repeatRow = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("event_repeat_type")
-        .setPlaceholder("Select repeat option...")
-        .addOptions([
-          { label: "Never (one-time event)", value: "never" },
-          { label: "Weekly (same day each week)", value: "weekly" },
-          { label: "Monthly (same date each month)", value: "monthly" },
-          { label: "Custom (every X days)", value: "custom" }
-        ])
-    );
-
-    await interaction.reply({
-      content: `✅ Event details saved!\n📅 **${title}** at **${location}**\n⏰ **${eventDate.toLocaleString("en-US")} PST**\n\n🔁 **How often should this event repeat?**`,
-      components: [repeatRow],
-      ephemeral: true
-    });
+    // Create the event immediately
+    await finalizeEvent(interaction, pending, supabase, client);
 
     return true;
   } catch (err) {
@@ -288,8 +235,6 @@ async function handleEventDateTimeInput(message, userId, pendingEvents) {
 module.exports = {
   handleEventModal,
   handleEventDateTimeInput,
-  handleEventRepeatSelect,
-  handleEventRepeatDaysInput,
   handleDeleteEventButton,
   pendingEvents
 };
