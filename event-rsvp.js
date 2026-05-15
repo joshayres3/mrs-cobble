@@ -1,11 +1,11 @@
 // ============================================================================
-// EVENT RSVP HANDLER - Handles RSVP button clicks
+// EVENT RSVP HANDLER - Handles RSVP button clicks and updates messages
 // ============================================================================
 
-const { addRSVP, removeRSVP, getUserRSVPs, getEventById } = require("./event-db");
-const { buildCalendarEmbed } = require("./event-calendar");
+const { addRSVP, removeRSVP, getUserRSVPs, getEventById, getRSVPCount } = require("./event-db");
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
-async function handleEventRSVPButton(interaction, supabase) {
+async function handleEventRSVPButton(interaction, supabase, client) {
   if (!interaction.customId.startsWith("event_rsvp_")) {
     return false;
   }
@@ -18,6 +18,15 @@ async function handleEventRSVPButton(interaction, supabase) {
     const userRsvps = await getUserRSVPs(supabase, discordId);
     const alreadyRsvped = userRsvps.includes(eventId);
 
+    const event = await getEventById(supabase, eventId);
+    if (!event) {
+      await interaction.reply({
+        content: "❌ Event not found.",
+        ephemeral: true
+      });
+      return true;
+    }
+
     if (alreadyRsvped) {
       // Remove RSVP (toggle off)
       await removeRSVP(supabase, eventId, discordId);
@@ -27,20 +36,70 @@ async function handleEventRSVPButton(interaction, supabase) {
       });
     } else {
       // Add RSVP (toggle on)
-      const event = await getEventById(supabase, eventId);
-      if (!event) {
-        await interaction.reply({
-          content: "❌ Event not found.",
-          ephemeral: true
-        });
-        return true;
-      }
-
       await addRSVP(supabase, eventId, discordId);
       await interaction.reply({
         content: `✅ You're in! See you at **${event.title}**!`,
         ephemeral: true
       });
+    }
+
+    // Update the event message with new RSVP count
+    if (event.calendar_message_id && client) {
+      try {
+        const channel = interaction.channel;
+        const message = await channel.messages.fetch(event.calendar_message_id);
+        
+        // Get updated RSVP count
+        const { data: rsvpData } = await supabase
+          .from("event_rsvps")
+          .select("*")
+          .eq("event_id", eventId);
+        const rsvpCount = rsvpData?.length || 0;
+
+        // Rebuild embed with updated count
+        const eventDate = new Date(event.event_date);
+        const timeStr = eventDate.toLocaleString("en-US", { 
+          month: "short", 
+          day: "numeric", 
+          hour: "numeric", 
+          minute: "2-digit", 
+          hour12: true 
+        });
+        
+        const updatedEmbed = new EmbedBuilder()
+          .setTitle(`📅 ${event.title}`)
+          .setDescription(event.description || "No description provided")
+          .addFields(
+            { name: "📍 Location", value: event.location, inline: false },
+            { name: "🕐 Time", value: `${timeStr} PST`, inline: false },
+            { name: "👥 RSVPs", value: `${rsvpCount} players`, inline: false }
+          )
+          .setColor(0xd4a574)
+          .setFooter({ text: "Times shown in PST" });
+
+        // Rebuild button row
+        const buttonRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`event_rsvp_${event.id}`)
+            .setLabel(`RSVP (${rsvpCount})`)
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji("✅"),
+          new ButtonBuilder()
+            .setCustomId(`event_delete_${event.id}`)
+            .setLabel("Delete Event")
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji("🗑️")
+        );
+
+        await message.edit({
+          embeds: [updatedEmbed],
+          components: [buttonRow]
+        });
+        console.log("Event message updated with new RSVP count:", rsvpCount);
+      } catch (err) {
+        console.error("Failed to update event message:", err);
+        // Don't fail the RSVP if message update fails
+      }
     }
 
     return true;

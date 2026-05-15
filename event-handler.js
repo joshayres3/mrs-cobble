@@ -114,6 +114,7 @@ async function finalizeEvent(interaction, pending, supabase, client) {
         );
         
         const message = await eventChannel.send({ 
+          content: "<@&1493702783961010209> New event posted!",
           embeds: [eventEmbed],
           components: [buttonRow]
         });

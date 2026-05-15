@@ -303,7 +303,7 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   }
   if (interaction.isButton()) {
     if (await handleGuideButton(interaction)) return;
-    if (await handleEventRSVPButton(interaction, supabase)) return;
+    if (await handleEventRSVPButton(interaction, supabase, discord)) return;
     if (await handleDeleteEventButton(interaction, supabase)) return;
     // Rule update confirm button
     if (interaction.customId === "ruleupdate_confirm") {
@@ -375,6 +375,48 @@ discord.on("messageCreate", async (message) => {
         return;
       }
     }
+  }
+
+  // ── !events command — list all upcoming events ───────────────────────────
+  if (userMessage.toLowerCase() === "!events" && message.guild) {
+    try {
+      const { getUpcomingEvents } = require("./event-db");
+      const allEvents = await getUpcomingEvents(supabase, 20);
+      
+      if (!allEvents || allEvents.length === 0) {
+        await message.reply("📅 No upcoming events scheduled.");
+        return;
+      }
+      
+      let description = "";
+      allEvents.forEach((evt, index) => {
+        const eventDate = new Date(evt.event_date);
+        const timeStr = eventDate.toLocaleString("en-US", { 
+          month: "short", 
+          day: "numeric", 
+          hour: "numeric", 
+          minute: "2-digit", 
+          hour12: true 
+        });
+        description += `${index + 1}. **${evt.title}**\n`;
+        description += `   📍 ${evt.location}\n`;
+        description += `   🕐 ${timeStr} PST\n`;
+        description += `   👥 RSVPs: ${evt.rsvp_count || 0}\n\n`;
+      });
+      
+      const { EmbedBuilder } = require("discord.js");
+      const eventsEmbed = new EmbedBuilder()
+        .setTitle("📅 UPCOMING EVENTS")
+        .setDescription(description)
+        .setColor(0xd4a574)
+        .setFooter({ text: "Times shown in PST" });
+      
+      await message.reply({ embeds: [eventsEmbed] });
+    } catch (err) {
+      console.error("Events command error:", err);
+      await message.reply("❌ Error fetching events.");
+    }
+    return;
   }
 
   // ── !ruleupdate command works from ANY channel for admins ───────────────────
