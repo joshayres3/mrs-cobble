@@ -59,7 +59,7 @@ async function handlePostWhatSelect(interaction) {
     const { pendingEvents } = require("./event-handler");
     pendingEvents[interaction.user.id] = { step: 1 };
     
-    // Show single modal with all event info
+    // Show single modal with all event info (5 fields ONLY - Location & Details combined)
     const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
     const modal = new ModalBuilder()
       .setCustomId("event_create_all")
@@ -70,41 +70,32 @@ async function handlePostWhatSelect(interaction) {
             .setCustomId("event_title")
             .setLabel("Event Title")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g., Clan Raid")
+            .setPlaceholder("e.g., Weekly Raid Night")
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
-            .setCustomId("event_location")
-            .setLabel("Location")
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g., Grid D5")
-            .setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId("event_description")
-            .setLabel("Description (optional)")
+            .setCustomId("event_location_desc")
+            .setLabel("Location & Details")
             .setStyle(TextInputStyle.Paragraph)
-            .setPlaceholder("Describe the event...")
-            .setRequired(false)
+            .setPlaceholder("e.g., Grid D5, bring guns and meds, meet at base entrance")
+            .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_datetime")
-            .setLabel("Date & Time (PST)")
+            .setLabel("Date & Time")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PST")
+            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM (e.g., 05/14/2026 7:30 PM)")
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_repeat")
-            .setLabel("Repeat (never/weekly/monthly/custom X)")
+            .setLabel("Repeat")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g., weekly or custom 3")
+            .setPlaceholder("never, weekly, monthly, or custom 3")
             .setRequired(true)
-            .setValue("never")
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
