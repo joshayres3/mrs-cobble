@@ -60,6 +60,7 @@ async function finalizeEvent(interaction, pending, supabase, client) {
       title: pending.title,
       description: pending.description,
       location: pending.location,
+      image_url: pending.image_url,
       event_date: pending.event_date,
       repeat_type: pending.repeat_type,
       repeat_every: pending.repeat_every,
@@ -96,6 +97,10 @@ async function finalizeEvent(interaction, pending, supabase, client) {
           )
           .setColor(0xd4a574)
           .setFooter({ text: "Times shown in PST" });
+        
+        if (event.image_url) {
+          eventEmbed.setImage(event.image_url);
+        }
         
         console.log("Sending event message...");
         
@@ -178,6 +183,7 @@ async function handleEventModal(interaction, supabase, client) {
     const description = interaction.fields.getTextInputValue("event_description") || "No description provided";
     const dateTimeStr = interaction.fields.getTextInputValue("event_datetime");
     const repeatStr = interaction.fields.getTextInputValue("event_repeat");
+    const imageUrl = interaction.fields.getTextInputValue("event_image") || null;
 
     // Parse flexible date/time format: MM/DD/YYYY HH:MM AM/PM
     // Accepts: 7:30 PM, 07:30 PM, 7:30p, 7:30PM, 730PM, 730pm, etc.

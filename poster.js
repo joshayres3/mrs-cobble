@@ -105,6 +105,14 @@ async function handlePostWhatSelect(interaction) {
             .setPlaceholder("e.g., weekly or custom 3")
             .setRequired(true)
             .setValue("never")
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("event_image")
+            .setLabel("Image URL (optional)")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("https://example.com/image.png")
+            .setRequired(false)
         )
       );
     
