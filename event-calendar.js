@@ -65,10 +65,10 @@ function buildEventReminderEmbed(event, reminderType) {
   let embed;
 
   if (reminderType === "1_day_before") {
-    // Full details reminder
+    // Full details reminder - 1 day before
     embed = new EmbedBuilder()
-      .setTitle(`📢 ${event.title}`)
-      .setDescription(event.description || "No description provided")
+      .setTitle(`⏰ STARTS IN 1 DAY: ${event.title}`)
+      .setDescription(event.location || "No location provided")
       .setColor(0xd4a574);
 
     if (event.image_url) {
@@ -76,27 +76,28 @@ function buildEventReminderEmbed(event, reminderType) {
     }
 
     embed.addFields(
-      { name: "📍 Location", value: event.location, inline: false },
+      { name: "📝 Details", value: event.description || "No description provided", inline: false },
       { name: "🕐 Time", value: `${pdtTime} PDT`, inline: false },
       { name: "👥 RSVPs", value: `${event.rsvp_count || 0} players`, inline: false }
     );
   } else if (reminderType === "1_hour_before") {
-    // Minimal reminder - just name and image
+    // 1 hour before reminder
     embed = new EmbedBuilder()
-      .setTitle(`📢 ${event.title}`)
-      .setColor(0xd4a574);
+      .setTitle(`⏰ STARTS IN 1 HOUR: ${event.title}`)
+      .setColor(0xffa500);
 
     if (event.image_url) {
       embed.setImage(event.image_url);
     }
 
     embed.addFields(
+      { name: "🕐 Time", value: `${pdtTime} PDT`, inline: false },
       { name: "👥 RSVPs", value: `${event.rsvp_count || 0} players`, inline: false }
     );
   } else if (reminderType === "event_start") {
-    // Event starting now - name and image only
+    // Event starting now
     embed = new EmbedBuilder()
-      .setTitle(`🎮 EVENT STARTING NOW: ${event.title}`)
+      .setTitle(`🎮 STARTING NOW: ${event.title}`)
       .setColor(0x4caf50);
 
     if (event.image_url) {
