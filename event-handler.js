@@ -75,21 +75,35 @@ async function finalizeEvent(interaction, pending, supabase, client) {
       const eventChannel = await client.channels.fetch(EVENT_CHANNEL_ID);
       console.log("Channel fetched:", eventChannel?.name || "unknown");
       if (eventChannel) {
-        console.log("Building calendar embed...");
+        console.log("Building event embed...");
         
-        // Create a simple test embed
-        const calendarEmbed = new EmbedBuilder()
-          .setTitle("📅 UPCOMING EVENTS")
-          .setDescription(`**${pending.title}**\n📍 ${pending.location}\n⏰ ${pending.event_date.toLocaleString()}\n👥 RSVPs: 0`)
-          .setColor(0xd4a574);
+        const eventDate = new Date(event.event_date);
+        const timeStr = eventDate.toLocaleString("en-US", { 
+          month: "short", 
+          day: "numeric", 
+          hour: "numeric", 
+          minute: "2-digit", 
+          hour12: true 
+        });
         
-        console.log("Sending calendar message...");
+        const eventEmbed = new EmbedBuilder()
+          .setTitle(`📅 ${event.title}`)
+          .setDescription(event.description || "No description provided")
+          .addFields(
+            { name: "📍 Location", value: event.location, inline: false },
+            { name: "🕐 Time", value: `${timeStr} PST`, inline: false },
+            { name: "👥 RSVPs", value: `${event.rsvp_count || 0} players`, inline: false }
+          )
+          .setColor(0xd4a574)
+          .setFooter({ text: "Times shown in PST" });
         
-        // Create button row with RSVP and DELETE buttons
+        console.log("Sending event message...");
+        
+        // Create button row with RSVP and DELETE buttons for this specific event
         const buttonRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`event_rsvp_${event.id}`)
-            .setLabel(`RSVP (0)`)
+            .setLabel(`RSVP (${event.rsvp_count || 0})`)
             .setStyle(ButtonStyle.Primary)
             .setEmoji("✅"),
           new ButtonBuilder()
@@ -100,10 +114,10 @@ async function finalizeEvent(interaction, pending, supabase, client) {
         );
         
         const message = await eventChannel.send({ 
-          embeds: [calendarEmbed],
+          embeds: [eventEmbed],
           components: [buttonRow]
         });
-        console.log("Calendar posted successfully, message ID:", message.id);
+        console.log("Event posted successfully, message ID:", message.id);
         
         // Store message ID in database for later updates
         await supabase
