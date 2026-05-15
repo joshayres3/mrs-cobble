@@ -69,10 +69,14 @@ async function finalizeEvent(interaction, pending, supabase, client) {
 
     // Post calendar with RSVP and DELETE buttons to events channel
     const EVENT_CHANNEL_ID = "1504618527242326170";
+    console.log("Attempting to post calendar to channel:", EVENT_CHANNEL_ID);
     try {
       const eventChannel = await client.channels.fetch(EVENT_CHANNEL_ID);
+      console.log("Channel fetched:", eventChannel?.name || "unknown");
       if (eventChannel) {
+        console.log("Building calendar embed...");
         const calendarEmbed = await buildCalendarEmbed(supabase);
+        console.log("Sending calendar message...");
         
         // Create button row with RSVP and DELETE buttons
         const buttonRow = new ActionRowBuilder().addComponents(
@@ -92,12 +96,15 @@ async function finalizeEvent(interaction, pending, supabase, client) {
           embeds: [calendarEmbed],
           components: [buttonRow]
         });
+        console.log("Calendar posted successfully, message ID:", message.id);
         
         // Store message ID in database for later updates
         await supabase
           .from("events")
           .update({ calendar_message_id: message.id })
           .eq("id", event[0].id);
+      } else {
+        console.error("Channel not found!");
       }
     } catch (err) {
       console.error("Failed to post calendar:", err);
