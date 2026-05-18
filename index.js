@@ -19,7 +19,6 @@ const { handleEventRSVPButton } = require("./event-rsvp");
 const { startReminderScheduler, stopReminderScheduler } = require("./event-reminders");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
-const eventDb = require("./event-db");
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const PLAYER_CHANNEL_ID = "1397942478379810887";
@@ -269,7 +268,7 @@ function hasSCUMTrigger(text) {
   return SCUM_TRIGGERS.some((t) => lower.includes(t));
 }
 
-function shouldSass() { return Math.random() < 0.55; }
+function shouldSass() { return Math.random() < 0.25; }
 
 function hasAdminRole(member) {
   return member.roles.cache.some((r) => ALLOWED_ROLES.includes(r.name));
@@ -305,7 +304,7 @@ discord.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     if (await handleGuideButton(interaction)) return;
     if (await handleEventRSVPButton(interaction, supabase, discord)) return;
-    if (await handleDeleteEventButton(interaction, supabase, eventDb)) return;
+    if (await handleDeleteEventButton(interaction, supabase)) return;
     // Rule update confirm button
     if (interaction.customId === "ruleupdate_confirm") {
       const pending = pendingUpdates[interaction.user.id];
@@ -533,7 +532,7 @@ discord.on("messageCreate", async (message) => {
   // ── ASSISTANT MODE — only respond in channels where it is enabled ────────────
   if (!enabledChannels.has(message.channelId)) return;
 
-  const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|build|park|vehicle|car|plane|shop|map|restart|ip|flag|ban|steal|cheat|inactiv|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
+  const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|park|vehicle|inactiv|ban|steal|cheat|map|restart|ip|flag|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
   const hasTrigger    = hasSCUMTrigger(userMessage);
 
   if (!looksLikeRule && !hasTrigger) return;
