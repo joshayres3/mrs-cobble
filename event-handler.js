@@ -2,7 +2,7 @@ const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = req
 
 const pendingEvents = {};
 
-async function handleEventModal(interaction, eventDb) {
+async function handleEventModal(interaction, supabase, eventDb) {
   try {
     if (interaction.customId !== "event_create_all") return;
 
@@ -46,11 +46,11 @@ async function handleEventModal(interaction, eventDb) {
     const repeatType = repeatMatch[1].toLowerCase();
     const repeatEvery = repeatMatch[2] ? parseInt(repeatMatch[2]) : null;
 
-    // Create event in database
-    const event = await eventDb.createEvent({
+    // Create event in database - PASS SUPABASE AS FIRST PARAM
+    const event = await eventDb.createEvent(supabase, {
       title,
-      location: locationDescription, // This now contains both location AND description
-      description: null, // No separate description field
+      location: locationDescription,
+      description: null,
       image_url: imageUrl,
       event_date: eventDate,
       repeat_type: repeatType,
@@ -63,7 +63,6 @@ async function handleEventModal(interaction, eventDb) {
       ephemeral: true
     });
 
-    // Delete pending event data if exists
     delete pendingEvents[interaction.user.id];
 
     return true;
