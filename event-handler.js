@@ -74,12 +74,20 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
       // Build event embed
       const embed = new EmbedBuilder()
         .setTitle(`📅 ${event.title}`)
-        .setColor(0xd4a574)
-        .setDescription(event.location || "TBD")
-        .addFields(
-          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) + " PDT", inline: false },
-          { name: "👥 RSVPs", value: "0 players", inline: false }
+        .setColor(0xd4a574);
+
+      // Add location as field if it exists
+      if (event.location && event.location.trim().length > 0) {
+        embed.addFields(
+          { name: "📍 Location & Details", value: event.location.substring(0, 1024), inline: false }
         );
+      }
+
+      // Add time
+      embed.addFields(
+        { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) + " PDT", inline: false },
+        { name: "👥 RSVPs", value: "0 players", inline: false }
+      );
 
       // Only add image if URL is valid and not empty
       if (event.image_url && event.image_url.trim().length > 0) {

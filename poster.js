@@ -71,14 +71,18 @@ async function handlePostWhatSelect(interaction) {
             .setLabel("Event Title")
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("e.g., Weekly Raid Night")
+            .setMinLength(1)
+            .setMaxLength(100)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_location_desc")
-            .setLabel("Location & Details")
+            .setLabel("Location & Details (max 1000 chars)")
             .setStyle(TextInputStyle.Paragraph)
             .setPlaceholder("e.g., Grid D5, bring guns and meds, meet at base entrance")
+            .setMinLength(1)
+            .setMaxLength(1000)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
@@ -87,6 +91,8 @@ async function handlePostWhatSelect(interaction) {
             .setLabel("Date & Time")
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("MM/DD/YYYY HH:MM AM/PM (e.g., 05/14/2026 7:30 PM)")
+            .setMinLength(16)
+            .setMaxLength(25)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
@@ -95,6 +101,8 @@ async function handlePostWhatSelect(interaction) {
             .setLabel("Repeat")
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("never, weekly, monthly, or custom 3")
+            .setMinLength(4)
+            .setMaxLength(20)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
@@ -103,6 +111,8 @@ async function handlePostWhatSelect(interaction) {
             .setLabel("Image URL (optional)")
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("https://example.com/image.png")
+            .setMinLength(0)
+            .setMaxLength(500)
             .setRequired(false)
         )
       );
