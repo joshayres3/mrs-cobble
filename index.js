@@ -536,8 +536,9 @@ discord.on("messageCreate", async (message) => {
     return;
   }
 
-  // ── ASSISTANT MODE — only respond in channels where it is enabled ────────────
-  if (!enabledChannels.has(message.channelId)) return;
+  // ── ASSISTANT MODE — respond in all channels EXCEPT ignored ones ────────────
+  const IGNORED_CHANNELS = ["1434426310620483665", "1490932618496311346"];
+  if (IGNORED_CHANNELS.includes(message.channelId)) return;
 
   const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|park|vehicle|inactiv|ban|steal|cheat|map|restart|ip|flag|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
   const hasTrigger    = hasSCUMTrigger(userMessage);
@@ -547,7 +548,7 @@ discord.on("messageCreate", async (message) => {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       systemInstruction: buildSystemPrompt(),
     });
     const result = await model.generateContent(userMessage);

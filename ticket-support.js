@@ -63,7 +63,7 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
     // Step D: Analyze ticket with Gemini
     const systemPrompt = buildTriagePrompt(liveRules);
     
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     
     const userMessage = `
       A player opened a support ticket with this message:
