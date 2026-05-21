@@ -20,8 +20,6 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
       return false;
     }
 
-    console.log("🎫 Ticket message detected from:", message.author.username);
-
     // Get all messages in channel
     const allMessages = await message.channel.messages.fetch({ limit: 50 });
     
@@ -31,8 +29,6 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
       .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
     
     const isFirstPlayerMessage = playerMessages.length > 0 && playerMessages.last().id === message.id;
-
-    console.log("Is first message?", isFirstPlayerMessage);
 
     // Step A: Send reassurance message ONLY on first player message
     if (isFirstPlayerMessage) {
@@ -46,8 +42,6 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
       await message.reply({
         embeds: [reassuranceEmbed]
       });
-      
-      console.log("✅ Sent reassurance message");
     }
 
     // Step B: Check if any admin (Sr. Admin or SCUM Admin) or Owner has already replied
@@ -56,11 +50,8 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
       msg.member.roles.cache.some(role => ["Sr. Admin", "SCUM Admin", "Owner"].includes(role.name))
     );
 
-    console.log("Has admin response?", hasAnyAdminResponse);
-
     // Kill switch: If admin already responded, let them handle it
     if (hasAnyAdminResponse) {
-      console.log("Admin already responded, skipping triage");
       return false;
     }
 
@@ -69,15 +60,10 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
     const ticketAgeMinutes = (Date.now() - ticketOpenTime) / (1000 * 60);
     const thirtyMinutesWithoutAdmin = ticketAgeMinutes >= 30 && !hasAnyAdminResponse;
 
-    console.log("Ticket age (mins):", ticketAgeMinutes);
-    console.log("Needs escalation?", thirtyMinutesWithoutAdmin);
-
     // Step D: Analyze ticket with Gemini
     const systemPrompt = buildTriagePrompt(liveRules);
     
-    console.log("Building Gemini request...");
-    
-    const model = genAI.getGenerativeModel({ model: "claude-sonnet-4-20250514" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const userMessage = `
       A player opened a support ticket with this message:
@@ -101,13 +87,11 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
     });
 
     const responseText = result.response.text();
-    console.log("Gemini response:", responseText);
     
     let triageData;
     try {
       const cleanedText = responseText.replace(/```json|```/g, "").trim();
       triageData = JSON.parse(cleanedText);
-      console.log("Parsed triage data:", triageData);
     } catch (parseErr) {
       console.error("Failed to parse triage JSON:", parseErr);
       triageData = { isAngry: false, isRuleQuestion: false, confidence: 0 };
@@ -117,7 +101,6 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
 
     // SCENARIO 1: Rule question → Mrs. Cobble answers directly (NO ADMIN PING)
     if (triageData.isRuleQuestion && triageData.ruleAnswer) {
-      console.log("Rule question detected, answering directly");
       const answerEmbed = new EmbedBuilder()
         .setTitle("📋 Rule Answer - Mrs. Cobble")
         .setDescription(triageData.ruleAnswer)
@@ -133,7 +116,6 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
 
     // SCENARIO 2: Angry/Frustrated → PING SR. ADMIN IMMEDIATELY
     if (triageData.isAngry) {
-      console.log("Angry player detected, pinging admin");
       const urgentEmbed = new EmbedBuilder()
         .setTitle("⚠️ PRIORITY TICKET - PLAYER IS FRUSTRATED")
         .setDescription(message.content)
@@ -155,7 +137,6 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
 
     // SCENARIO 3: General issue + 30+ mins with no admin → PING SR. ADMIN (ESCALATION)
     if (thirtyMinutesWithoutAdmin) {
-      console.log("30+ min escalation triggered");
       const escalationEmbed = new EmbedBuilder()
         .setTitle("⏰ TICKET ESCALATION - 30+ Minutes No Response")
         .setDescription(message.content)
@@ -176,12 +157,11 @@ async function handleTicketTriage(message, supabase, genAI, liveRules) {
     }
 
     // SCENARIO 4: General issue + less than 30 mins → DO NOTHING, WAIT SILENTLY
-    console.log("General issue, waiting silently for admin");
+    // Mrs. Cobble has already sent the reassurance message, now we just wait for admin
     return true;
 
   } catch (error) {
-    console.error("❌ Ticket triage error:", error);
-    console.error("Error details:", error.message);
+    console.error("Ticket triage error:", error);
     try {
       await message.reply({
         content: `<@&${SR_ADMIN_ROLE_ID}> There was an error processing this ticket. Please review manually.`,
@@ -200,8 +180,6 @@ function buildTriagePrompt(liveRules) {
     for (const [section, content] of Object.entries(liveRules)) {
       rulesText += `[${section}]\n${content}\n\n`;
     }
-  } else {
-    rulesText = "No rules loaded yet.";
   }
 
   return `You are Mrs. Cobble, a support triage assistant for a SCUM game server Discord.
