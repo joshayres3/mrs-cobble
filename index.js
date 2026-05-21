@@ -20,6 +20,7 @@ const { startReminderScheduler, stopReminderScheduler } = require("./event-remin
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require("@supabase/supabase-js");
 const eventDb = require("./event-db");
+const { handleTicketTriage } = require("./ticket-support");
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const PLAYER_CHANNEL_ID = "1397942478379810887";
@@ -359,6 +360,11 @@ discord.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const userMessage = message.content.trim();
   if (!userMessage) return;
+
+  // ── TICKET SUPPORT TRIAGE ─────────────────────────────────────────────
+  if (message.guild && message.channel.parentId === "1319718509432803489") {
+    if (await handleTicketTriage(message, supabase, genAI, liveRules)) return;
+  }
 
   // Handle event date/time input for event creation
   if (message.guild && !message.author.bot) {
