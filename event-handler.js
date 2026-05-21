@@ -2,7 +2,7 @@ const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = req
 
 const pendingEvents = {};
 
-async function handleEventModal(interaction, supabase, eventDb) {
+async function handleEventModal(interaction, supabase, eventDb, discord) {
   try {
     if (interaction.customId !== "event_create_all") return;
 
@@ -46,7 +46,7 @@ async function handleEventModal(interaction, supabase, eventDb) {
     const repeatType = repeatMatch[1].toLowerCase();
     const repeatEvery = repeatMatch[2] ? parseInt(repeatMatch[2]) : null;
 
-    // Create event in database - PASS SUPABASE AS FIRST PARAM
+    // Create event in database
     const event = await eventDb.createEvent(supabase, {
       title,
       location: locationDescription,
@@ -58,8 +58,60 @@ async function handleEventModal(interaction, supabase, eventDb) {
       created_by: interaction.user.id
     });
 
+    // Post event to #Cobble-Events channel
+    try {
+      const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+      const EVENT_CHANNEL_ID = "1504618527242326170";
+      const NOTIFICATION_ROLE_ID = "1186345001219788840";
+
+      const channel = await discord.channels.fetch(EVENT_CHANNEL_ID);
+      
+      // Build event embed
+      const embed = new EmbedBuilder()
+        .setTitle(`📅 ${event.title}`)
+        .setColor(0xd4a574)
+        .addFields(
+          { name: "📍 Location", value: event.location || "TBD", inline: false },
+          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) + " PDT", inline: false },
+          { name: "👥 RSVPs", value: `0 players`, inline: false }
+        );
+
+      if (event.image_url) {
+        embed.setImage(event.image_url);
+      }
+
+      // Create buttons
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`event_rsvp_${event.id}`)
+            .setLabel(`RSVP (0)`)
+            .setStyle(ButtonStyle.Success)
+            .setEmoji("✅"),
+          new ButtonBuilder()
+            .setCustomId(`event_delete_${event.id}`)
+            .setLabel("Delete Event")
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji("🗑️")
+        );
+
+      // Send message with role mention
+      const msg = await channel.send({
+        content: `<@&${NOTIFICATION_ROLE_ID}> New event posted!`,
+        embeds: [embed],
+        components: [row]
+      });
+
+      // Save message ID to database
+      await eventDb.updateEvent(supabase, event.id, {
+        calendar_message_id: msg.id
+      });
+    } catch (channelErr) {
+      console.error("Error posting event to channel:", channelErr);
+    }
+
     await interaction.reply({
-      content: `✅ Event "${title}" created! Posting to #Cobble-Events now...`,
+      content: `✅ Event "${title}" created! Posted to #Cobble-Events.`,
       ephemeral: true
     });
 
