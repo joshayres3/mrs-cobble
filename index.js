@@ -40,6 +40,7 @@ const genAI    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 let liveRules = {};
 let enabledChannels = new Set();
+let pendingUpdates = {};
 
 // ─── Load Data on Startup ──────────────────────────────────────────────────
 discord.once("ready", async () => {
