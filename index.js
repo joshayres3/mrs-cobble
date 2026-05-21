@@ -203,7 +203,36 @@ discord.on("messageCreate", async (message) => {
       await message.reply("🚫 Sr. Admin or Owner only.");
       return;
     }
-    await handleRuleUpdateSectionSelect(message);
+    // Show the post menu via a select menu in a message
+    const { handlePostWhatSelect } = require("./poster");
+    try {
+      await message.reply({
+        content: "**What do you want to post?**",
+        components: [
+          {
+            type: 1,
+            components: [
+              {
+                type: 3,
+                custom_id: "post_select_what",
+                placeholder: "Choose an option...",
+                options: [
+                  { label: "📖 SCUM Player Guide", value: "guide" },
+                  { label: "📋 Server Rules", value: "rules" },
+                  { label: "📅 Create Event", value: "event" },
+                  { label: "🎤 Enable/Disable Assistant Mode", value: "assistant" },
+                  { label: "📣 Announcement", value: "announce" }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+    } catch (err) {
+      console.error("Error showing post menu:", err);
+      await message.reply("Error showing menu.");
+    }
+    return;
   }
 
   // ── Rule Update Text Handler ──────────────────────────────────────────────────
