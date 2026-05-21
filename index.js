@@ -360,6 +360,8 @@ discord.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const userMessage = message.content.trim();
   if (!userMessage) return;
+  
+  const IGNORED_CHANNELS = ["1434426310620483665", "1490932618496311346"];
 
   // ── TICKET SUPPORT TRIAGE ─────────────────────────────────────────────
   if (message.guild && message.channel.parentId === "1319718509432803489") {
@@ -533,7 +535,6 @@ discord.on("messageCreate", async (message) => {
     }
 
   // ── ASSISTANT MODE — respond in all channels EXCEPT ignored ones ────────────
-  const IGNORED_CHANNELS = ["1434426310620483665", "1490932618496311346"];
   if (IGNORED_CHANNELS.includes(message.channelId)) return;
 
   const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|park|vehicle|inactiv|ban|steal|cheat|map|restart|ip|flag|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
