@@ -70,14 +70,19 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
       const embed = new EmbedBuilder()
         .setTitle(`📅 ${event.title}`)
         .setColor(0xd4a574)
+        .setDescription(event.location || "TBD")
         .addFields(
-          { name: "📍 Location", value: event.location || "TBD", inline: false },
           { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) + " PDT", inline: false },
-          { name: "👥 RSVPs", value: `0 players`, inline: false }
+          { name: "👥 RSVPs", value: "0 players", inline: false }
         );
 
-      if (event.image_url) {
-        embed.setImage(event.image_url);
+      // Only add image if URL is valid and not empty
+      if (event.image_url && event.image_url.trim().length > 0) {
+        try {
+          embed.setImage(event.image_url);
+        } catch (imgErr) {
+          console.warn("Invalid image URL:", event.image_url);
+        }
       }
 
       // Create buttons
@@ -85,7 +90,7 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
         .addComponents(
           new ButtonBuilder()
             .setCustomId(`event_rsvp_${event.id}`)
-            .setLabel(`RSVP (0)`)
+            .setLabel("RSVP (0)")
             .setStyle(ButtonStyle.Success)
             .setEmoji("✅"),
           new ButtonBuilder()
