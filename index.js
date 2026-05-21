@@ -532,10 +532,6 @@ discord.on("messageCreate", async (message) => {
       return;
     }
 
-    // Ignore everything else in admin channel
-    return;
-  }
-
   // ── ASSISTANT MODE — respond in all channels EXCEPT ignored ones ────────────
   const IGNORED_CHANNELS = ["1434426310620483665", "1490932618496311346"];
   if (IGNORED_CHANNELS.includes(message.channelId)) return;
@@ -543,8 +539,32 @@ discord.on("messageCreate", async (message) => {
   const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|park|vehicle|inactiv|ban|steal|cheat|map|restart|ip|flag|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
   const hasTrigger    = hasSCUMTrigger(userMessage);
 
+  console.log("🤖 Assistant check - Message:", userMessage);
+  console.log("🤖 looksLikeRule:", looksLikeRule);
+  console.log("🤖 hasTrigger:", hasTrigger);
+
   if (!looksLikeRule && !hasTrigger) return;
   if (!looksLikeRule && hasTrigger && !shouldSass()) return;
+
+  console.log("🤖 Calling Gemini...");
+  const IGNORED_CHANNELS = ["1434426310620483665", "1490932618496311346"];
+  if (IGNORED_CHANNELS.includes(message.channelId)) return;
+
+  const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|park|vehicle|inactiv|ban|steal|cheat|map|restart|ip|flag|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
+  const hasTrigger    = hasSCUMTrigger(userMessage);
+
+  console.log("🤖 Assistant check - Message:", userMessage);
+  console.log("🤖 looksLikeRule:", looksLikeRule);
+  console.log("🤖 hasTrigger:", hasTrigger);
+
+  if (!looksLikeRule && !hasTrigger) {
+    // Ignore everything else in admin channel ONLY if not a rule/trigger
+    if (message.channelId === ADMIN_CHANNEL_ID) return;
+  }
+  
+  if (!looksLikeRule && hasTrigger && !shouldSass()) return;
+
+  console.log("🤖 Calling Gemini...");
 
   try {
     const model = genAI.getGenerativeModel({
