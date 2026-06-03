@@ -26,49 +26,40 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
     if (ampm.toUpperCase() === "PM" && hour24 !== 12) hour24 += 12;
     if (ampm.toUpperCase() === "AM" && hour24 === 12) hour24 = 0;
 
-    // Create a date object treating input as California local time
-    // We'll use Intl to properly get the offset
-    const inputDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour24.toString().padStart(2, '0')}:${min}:00`);
-    
-    // Get what this date would be in California timezone
-    const californiaFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+    // Convert California time to UTC by calculating the offset for that date
+    // Create a date and check what time it would be in California
+    const testDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`);
+    const laTimeStr = testDate.toLocaleString("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
       hour12: false
     });
     
-    const californiaTime = californiaFormatter.format(inputDate);
-    const [caliDate, caliTime] = californiaTime.split(', ');
-    const [caliMonth, caliDay, caliYear] = caliDate.split('/');
-    const [caliHour, caliMin, caliSec] = caliTime.split(':');
+    const [laDatePart, laTimePart] = laTimeStr.split(", ");
+    const [laMonth, laDay, laYear] = laDatePart.split("/");
+    const [laHour] = laTimePart.split(":");
     
-    // Calculate the offset by comparing input time with what it shows in California
-    const inputHour = parseInt(hour24);
-    const caliHourNum = parseInt(caliHour);
-    let offsetHours = inputHour - caliHourNum;
+    // Offset is how many hours UTC is ahead of California at noon UTC
+    const laHourAtNoon = parseInt(laHour);
+    const offsetHours = 12 - laHourAtNoon;
     
-    // Handle day wraparound
-    if (offsetHours > 12) offsetHours -= 24;
-    if (offsetHours < -12) offsetHours += 24;
-    
-    // Convert input (California time) to UTC by adding the offset
-    let utcHour = inputHour + offsetHours;
+    // Now apply this offset to convert the input California time to UTC
+    let utcHour24 = hour24 + offsetHours;
     let adjustedDay = parseInt(day);
     
-    if (utcHour >= 24) {
-      utcHour -= 24;
+    if (utcHour24 >= 24) {
+      utcHour24 -= 24;
       adjustedDay += 1;
-    } else if (utcHour < 0) {
-      utcHour += 24;
+    } else if (utcHour24 < 0) {
+      utcHour24 += 24;
       adjustedDay -= 1;
     }
 
-    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${utcHour.toString().padStart(2, '0')}:${min}:00Z`);
+    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${Math.floor(utcHour24).toString().padStart(2, '0')}:${min}:00Z`);
     if (isNaN(eventDate.getTime())) {
       return await interaction.reply({
         content: "❌ Invalid date. Please enter a valid date and time.",
@@ -114,7 +105,7 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
         .setColor(0xd4a574)
         .addFields(
           { name: "📍 Location", value: event.location || "TBD", inline: false },
-          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }), inline: false },
+          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) + " PDT/PST", inline: false },
           { name: "👥 RSVPs", value: `0 players`, inline: false }
         );
 
