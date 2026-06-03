@@ -13,7 +13,7 @@ async function buildCalendarEmbed(supabase, userId = null) {
       .setTitle("📅 UPCOMING EVENTS")
       .setDescription("No events scheduled yet.")
       .setColor(0xd4a574)
-      .setFooter({ text: "All times shown in PDT (Pacific Daylight Time)" });
+      .setFooter({ text: "All times shown in your local timezone" });
   }
 
   let description = "";
@@ -21,8 +21,7 @@ async function buildCalendarEmbed(supabase, userId = null) {
 
   events.forEach((event, index) => {
     const eventDate = new Date(event.event_date);
-    const pdtTime = eventDate.toLocaleString("en-US", {
-      timeZone: "America/Los_Angeles",
+    const localTime = eventDate.toLocaleString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -36,7 +35,7 @@ async function buildCalendarEmbed(supabase, userId = null) {
 
     description += `${index + 1}. **${event.title}**\n`;
     description += `📍 ${event.location}\n`;
-    description += `🕐 ${pdtTime} PDT\n`;
+    description += `🕐 ${localTime}\n`;
     description += `👥 ${rsvpIndicator}RSVPs: ${event.rsvp_count || 0}\n\n`;
   });
 
@@ -44,7 +43,7 @@ async function buildCalendarEmbed(supabase, userId = null) {
     .setTitle("📅 UPCOMING EVENTS")
     .setDescription(description)
     .setColor(0xd4a574)
-    .setFooter({ text: "All times shown in PDT (Pacific Daylight Time)" });
+    .setFooter({ text: "All times shown in your local timezone" });
 
   return embed;
 }
@@ -52,8 +51,7 @@ async function buildCalendarEmbed(supabase, userId = null) {
 // Build individual event reminder embed
 function buildEventReminderEmbed(event, reminderType) {
   const eventDate = new Date(event.event_date);
-  const pdtTime = eventDate.toLocaleString("en-US", {
-    timeZone: "America/Los_Angeles",
+  const localTime = eventDate.toLocaleString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -77,7 +75,7 @@ function buildEventReminderEmbed(event, reminderType) {
 
     embed.addFields(
       { name: "📝 Details", value: event.description || "No description provided", inline: false },
-      { name: "🕐 Time", value: `${pdtTime} PDT`, inline: false },
+      { name: "🕐 Time", value: `${localTime}`, inline: false },
       { name: "👥 RSVPs", value: `${event.rsvp_count || 0} players`, inline: false }
     );
   } else if (reminderType === "1_hour_before") {
@@ -91,7 +89,7 @@ function buildEventReminderEmbed(event, reminderType) {
     }
 
     embed.addFields(
-      { name: "🕐 Time", value: `${pdtTime} PDT`, inline: false },
+      { name: "🕐 Time", value: `${localTime}`, inline: false },
       { name: "👥 RSVPs", value: `${event.rsvp_count || 0} players`, inline: false }
     );
   } else if (reminderType === "event_start") {
@@ -115,7 +113,6 @@ function buildEventReminderEmbed(event, reminderType) {
 // Format time for display
 function formatEventTime(eventDate) {
   return new Date(eventDate).toLocaleString("en-US", {
-    timeZone: "America/Los_Angeles",
     weekday: "short",
     month: "short",
     day: "numeric",

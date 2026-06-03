@@ -26,12 +26,20 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
     if (ampm.toUpperCase() === "PM" && hour24 !== 12) hour24 += 12;
     if (ampm.toUpperCase() === "AM" && hour24 === 12) hour24 = 0;
 
-    // Convert PDT input to UTC (PDT is UTC-7, so add 7 hours)
-    let utcHour24 = hour24 + 7;
+    // Create a temporary date to calculate the UTC offset for America/Los_Angeles (handles DST automatically)
+    const tempDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour24.toString().padStart(2, '0')}:${min}:00`);
+    const laTime = new Date(tempDate.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const utcOffset = (tempDate - laTime) / (1000 * 60 * 60); // Calculate offset in hours
+
+    // Convert California time to UTC using the dynamic offset
+    let utcHour24 = hour24 + utcOffset;
     let adjustedDay = parseInt(day);
     if (utcHour24 >= 24) {
       utcHour24 -= 24;
       adjustedDay += 1;
+    } else if (utcHour24 < 0) {
+      utcHour24 += 24;
+      adjustedDay -= 1;
     }
 
     const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${utcHour24.toString().padStart(2, '0')}:${min}:00Z`);
@@ -80,7 +88,7 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
         .setColor(0xd4a574)
         .addFields(
           { name: "📍 Location", value: event.location || "TBD", inline: false },
-          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) + " PDT", inline: false },
+          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }), inline: false },
           { name: "👥 RSVPs", value: `0 players`, inline: false }
         );
 
@@ -161,9 +169,9 @@ async function showCreateEventModal(interaction) {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_datetime")
-            .setLabel("Date & Time")
+            .setLabel("Date & Time (California Time)")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM (e.g., 05/14/2026 7:30 PM)")
+            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PST/PDT (e.g., 05/14/2026 1:35 PM)")
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
