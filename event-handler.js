@@ -26,46 +26,49 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
     if (ampm.toUpperCase() === "PM" && hour24 !== 12) hour24 += 12;
     if (ampm.toUpperCase() === "AM" && hour24 === 12) hour24 = 0;
 
-    // Create date string for California timezone
-    const dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour24.toString().padStart(2, '0')}:${min}:00`;
+    // Create a date object treating input as California local time
+    // We'll use Intl to properly get the offset
+    const inputDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour24.toString().padStart(2, '0')}:${min}:00`);
     
-    // Create a UTC date assuming the input is in UTC temporarily
-    const utcDate = new Date(dateStr + 'Z');
-    
-    // Convert to LA timezone to see what time it would be
-    const laTimeStr = utcDate.toLocaleString("en-US", { 
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+    // Get what this date would be in California timezone
+    const californiaFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
       hour12: false
     });
     
-    // Parse the LA time back to a date object
-    const [laDate, laTime] = laTimeStr.split(', ');
-    const [laMonth, laDay, laYear] = laDate.split('/');
-    const [laHour, laMinute, laSecond] = laTime.split(':');
-    const laAsUtc = new Date(`${laYear}-${laMonth}-${laDay}T${laHour}:${laMinute}:${laSecond}Z`);
+    const californiaTime = californiaFormatter.format(inputDate);
+    const [caliDate, caliTime] = californiaTime.split(', ');
+    const [caliMonth, caliDay, caliYear] = caliDate.split('/');
+    const [caliHour, caliMin, caliSec] = caliTime.split(':');
     
-    // The difference tells us the offset
-    const offsetMs = utcDate - laAsUtc;
-    const offsetHours = offsetMs / (1000 * 60 * 60);
+    // Calculate the offset by comparing input time with what it shows in California
+    const inputHour = parseInt(hour24);
+    const caliHourNum = parseInt(caliHour);
+    let offsetHours = inputHour - caliHourNum;
     
-    // Now convert the input time (which is California time) to UTC
-    let utcHour24 = hour24 + offsetHours;
+    // Handle day wraparound
+    if (offsetHours > 12) offsetHours -= 24;
+    if (offsetHours < -12) offsetHours += 24;
+    
+    // Convert input (California time) to UTC by adding the offset
+    let utcHour = inputHour + offsetHours;
     let adjustedDay = parseInt(day);
-    if (utcHour24 >= 24) {
-      utcHour24 -= 24;
+    
+    if (utcHour >= 24) {
+      utcHour -= 24;
       adjustedDay += 1;
-    } else if (utcHour24 < 0) {
-      utcHour24 += 24;
+    } else if (utcHour < 0) {
+      utcHour += 24;
       adjustedDay -= 1;
     }
 
-    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${Math.floor(utcHour24).toString().padStart(2, '0')}:${min}:00Z`);
+    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${utcHour.toString().padStart(2, '0')}:${min}:00Z`);
     if (isNaN(eventDate.getTime())) {
       return await interaction.reply({
         content: "❌ Invalid date. Please enter a valid date and time.",
