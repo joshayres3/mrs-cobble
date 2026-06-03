@@ -26,7 +26,15 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
     if (ampm.toUpperCase() === "PM" && hour24 !== 12) hour24 += 12;
     if (ampm.toUpperCase() === "AM" && hour24 === 12) hour24 = 0;
 
-    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour24.toString().padStart(2, '0')}:${min}:00Z`);
+    // Convert PDT input to UTC (PDT is UTC-7, so add 7 hours)
+    let utcHour24 = hour24 + 7;
+    let adjustedDay = parseInt(day);
+    if (utcHour24 >= 24) {
+      utcHour24 -= 24;
+      adjustedDay += 1;
+    }
+
+    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${utcHour24.toString().padStart(2, '0')}:${min}:00Z`);
     if (isNaN(eventDate.getTime())) {
       return await interaction.reply({
         content: "❌ Invalid date. Please enter a valid date and time.",
