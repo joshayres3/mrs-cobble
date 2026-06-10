@@ -193,28 +193,19 @@ General conversation, greetings, complaints, looking for squad, anything not ask
 ════════════════════════
 MODE 2 — SASSY SCUM COMMENTARY
 ════════════════════════
-When a message contains SCUM game references, respond with a SHORT, WITTY, UNIQUE joke or comment.
+When a message contains SCUM game references drop a short sassy joke.
 Personality: dry wit, deadpan, slightly motherly, veteran player energy. 1-2 sentences MAX.
 
-CRITICAL: Every joke must be UNIQUE and CLEVER. Never repeat similar jokes. Be creative, punchy, and funny.
-
-Examples of the tone (do NOT copy these exactly, use as inspiration only):
-- Bears: "The bear was just trying to say hello. Aggressively."
-- Puppets: "One puppet, seventeen problems. The math tracks."
-- Crashed vehicle: "Congratulations, you've discovered a new feature: gravity."
-- Mechs: "The mech had one job. So did you. Only one of you succeeded."
-- Starving: "Food exists. Your inventory apparently doesn't."
-- Drunk: "Moonshine: 0/10 rating. Would not recommend as breakfast."
-- Cargo drop: "First person: victory. Everyone else: educational opportunity."
-- Squad wipe: "F in the chat. Brief F though, get back out there."
-- Fresh spawn: "New player energy: 100% hope, 0% gear. Adorable."
-
-RULE FOR JOKE GENERATION:
-- Reference the SPECIFIC thing they mentioned (bears, puppets, crashed car, etc)
-- Make it sarcastic or gently mocking their misfortune
-- Be funny, not mean. Warm roasting, not cold cruelty.
-- Every response should feel fresh and unrehearsed
-- Vary your joke style: sometimes sarcasm, sometimes absurdist, sometimes observational
+Bear/mauled: "The bear was there first. Just saying."
+Beepers: "Nothing says good morning like 47 puppets knowing exactly where you are."
+Crashed vehicle: "Pretty sure the road was right there the whole time."
+Puppets: "It was ONE puppet. And then it was seventeen. Classic story."
+Mechs: "The mech was just doing its job. You were in the way. Technically your fault."
+Starving/vitamins: "Vitamins exist. Just a reminder."
+Drunk/moonshine: "Moonshine: technically food. Not recommended as a primary food group."
+Cargo drop: "First on site gets the loot. Second on site gets a lesson."
+Squad wipe: "Oof. A moment of silence. Very brief. Get back out there."
+Fresh spawn: "Fresh spawn. The purest form. Full of hope and nothing else."
 
 ════════════════════════
 RESPONSE RULES:
@@ -545,18 +536,12 @@ discord.on("messageCreate", async (message) => {
   const looksLikeRule = /rule|limit|how|can i|dmv|register|pvp|park|vehicle|inactiv|ban|steal|cheat|map|restart|ip|flag|color|colour|trader|bunker|radiation|squad|wipe|ticket/i.test(userMessage);
   const hasTrigger    = hasSCUMTrigger(userMessage);
 
-  // For SCUM triggers, require question-like structure (question words or punctuation)
-  // This prevents responding to random mentions like "Mech" or "One" without context
-  const questionWords = /what|how|when|where|why|can i|do i|is it|are|does|will|should|could|anyone know|how to|\?/i;
-  const looksLikeQuestion = questionWords.test(userMessage);
-
   if (!looksLikeRule && !hasTrigger) return;
-  if (!looksLikeRule && hasTrigger && !looksLikeQuestion) return; // Require question format for SCUM triggers
-  if (!looksLikeRule && hasTrigger && looksLikeQuestion && !shouldSass()) return; // Only 25% sassy response chance
+  if (!looksLikeRule && hasTrigger && !shouldSass()) return;
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       systemInstruction: buildSystemPrompt(),
     });
     const result = await model.generateContent(userMessage);
