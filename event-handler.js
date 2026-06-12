@@ -26,40 +26,7 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
     if (ampm.toUpperCase() === "PM" && hour24 !== 12) hour24 += 12;
     if (ampm.toUpperCase() === "AM" && hour24 === 12) hour24 = 0;
 
-    // Convert California time to UTC by calculating the offset for that date
-    // Create a date and check what time it would be in California
-    const testDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`);
-    const laTimeStr = testDate.toLocaleString("en-US", {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    });
-    
-    const [laDatePart, laTimePart] = laTimeStr.split(", ");
-    const [laMonth, laDay, laYear] = laDatePart.split("/");
-    const [laHour] = laTimePart.split(":");
-    
-    // Offset is how many hours UTC is ahead of California at noon UTC
-    const laHourAtNoon = parseInt(laHour);
-    const offsetHours = 12 - laHourAtNoon;
-    
-    // Now apply this offset to convert the input California time to UTC
-    let utcHour24 = hour24 + offsetHours;
-    let adjustedDay = parseInt(day);
-    
-    if (utcHour24 >= 24) {
-      utcHour24 -= 24;
-      adjustedDay += 1;
-    } else if (utcHour24 < 0) {
-      utcHour24 += 24;
-      adjustedDay -= 1;
-    }
-
-    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${adjustedDay.toString().padStart(2, '0')}T${Math.floor(utcHour24).toString().padStart(2, '0')}:${min}:00Z`);
+    const eventDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour24.toString().padStart(2, '0')}:${min}:00Z`);
     if (isNaN(eventDate.getTime())) {
       return await interaction.reply({
         content: "❌ Invalid date. Please enter a valid date and time.",
@@ -105,7 +72,7 @@ async function handleEventModal(interaction, supabase, eventDb, discord) {
         .setColor(0xd4a574)
         .addFields(
           { name: "📍 Location", value: event.location || "TBD", inline: false },
-          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) + " PDT/PST", inline: false },
+          { name: "🕐 Time", value: new Date(event.event_date).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) + " PDT", inline: false },
           { name: "👥 RSVPs", value: `0 players`, inline: false }
         );
 
@@ -186,9 +153,9 @@ async function showCreateEventModal(interaction) {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("event_datetime")
-            .setLabel("Date & Time (California Time)")
+            .setLabel("Date & Time")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM PST/PDT (e.g., 05/14/2026 1:35 PM)")
+            .setPlaceholder("MM/DD/YYYY HH:MM AM/PM (e.g., 05/14/2026 7:30 PM)")
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
