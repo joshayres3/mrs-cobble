@@ -541,7 +541,7 @@ discord.on("messageCreate", async (message) => {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.0-flash-lite",
       systemInstruction: buildSystemPrompt(),
     });
     const result = await model.generateContent(userMessage);
